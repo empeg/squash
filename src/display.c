@@ -88,6 +88,13 @@ void window_init( void ) {
     display_info.window[ WIN_PLAYLIST ].state = WIN_STATE_NORMAL;
     display_info.window[ WIN_PLAYLIST ].window = NULL;
 
+    display_info.window[ WIN_PASTLIST ].is_fixed = 0;
+    display_info.window[ WIN_PASTLIST ].is_persistent = 0;
+    display_info.window[ WIN_PASTLIST ].size.calc.weight = 50;
+    display_info.window[ WIN_PASTLIST ].size.calc.min_height = 4;
+    display_info.window[ WIN_PASTLIST ].state = WIN_STATE_HIDDEN;
+    display_info.window[ WIN_PASTLIST ].window = NULL;
+
     display_info.window[ WIN_HELP ].is_fixed = 1;
     display_info.window[ WIN_HELP ].is_persistent = 0;
     display_info.window[ WIN_HELP ].size.fixed.height = 3;
@@ -111,17 +118,20 @@ void *display_monitor( void *input_data ) {
         /* Grab additional locks */
         squash_rlock( database_info.lock );
         squash_lock( song_queue.lock );
+        squash_lock( past_queue.lock );
         squash_lock( player_info.lock );
 
         /* Update the screen */
         draw_now_playing();
-        draw_playlist();
+        draw_list( WIN_PLAYLIST );
+        draw_list( WIN_PASTLIST );
         draw_info();
         draw_help();
 
         /* Release locks */
         squash_unlock( player_info.lock );
         squash_unlock( song_queue.lock );
+        squash_unlock( past_queue.lock );
         squash_runlock( database_info.lock );
         squash_unlock( display_info.lock );
     }
@@ -255,6 +265,7 @@ void draw_screen( void ) {
     /* Acquire locks */
     squash_rlock( database_info.lock );
     squash_lock( song_queue.lock );
+    squash_lock( past_queue.lock );
     squash_lock( player_info.lock );
     squash_lock( spectrum_info.lock );
 
@@ -273,12 +284,14 @@ void draw_screen( void ) {
     draw_spectrum();
     draw_help();
     draw_now_playing();
-    draw_playlist();
+    draw_list( WIN_PLAYLIST );
+    draw_list( WIN_PASTLIST );
     draw_info();
 
     /* Release locks */
     squash_unlock( spectrum_info.lock );
     squash_unlock( player_info.lock );
+    squash_unlock( past_queue.lock );
     squash_unlock( song_queue.lock );
     squash_runlock( database_info.lock );
 }
@@ -326,6 +339,12 @@ void draw_now_playing( void ) {
 
     /* Reset color */
     wattroff( win, text_color );
+
+    if( display_info.focus == WIN_NOW_PLAYING ) {
+        wattron( win, COLOR_PAIR(TEXT_WHITE) | A_BOLD );
+        mvwprintw( win, 0, 1, "*" );
+        wattroff( win, COLOR_PAIR(TEXT_WHITE) | A_BOLD );
+    }
 
     /* Get Song */
     cur_song = player_info.song;
@@ -404,7 +423,7 @@ void draw_now_playing( void ) {
 /*
  * Draw the playlist window
  */
-void draw_playlist( void ) {
+void draw_list( int which_window ) {
     WINDOW *win;
     int win_height, win_width;
     int col_left[ 3 ];
@@ -412,20 +431,38 @@ void draw_playlist( void ) {
     int list_height, start_index, max_size;
     int text_color, select_color;
     int i;
+    bool have_focus;
+    song_queue_t *queue;
+    char *header;
+
+    switch( which_window ) {
+        case WIN_PLAYLIST:
+            queue = &song_queue;
+            header = "Up Next";
+            text_color = COLOR_PAIR( TEXT_BLUE ) | A_BOLD;
+            break;
+        case WIN_PASTLIST:
+            header = "Past Items";
+            queue = &past_queue;
+            text_color = COLOR_PAIR( TEXT_CYAN );
+            break;
+        default:
+            return;
+    }
+
+    have_focus = which_window == display_info.focus;
 
     /* Set the window */
-    if( (win = display_info.window[WIN_PLAYLIST].window) == NULL ) {
+    if( (win = display_info.window[which_window].window) == NULL ) {
         return;
     }
+
 
     /* Get window size */
     getmaxyx( win, win_height, win_width );
 
     /* Clear the screen */
     werase( win );
-
-    /* Set the text color */
-    text_color = COLOR_PAIR( TEXT_BLUE ) | A_BOLD;
 
     /* Setup the window color */
     wattron( win, text_color );
@@ -445,7 +482,7 @@ void draw_playlist( void ) {
     mvwaddch( win, 1, win_width - 1, ACS_RTEE );
 
     /* Print Headers */
-    mvwprintw( win, 0, 2, "Up Next" );
+    mvwprintw( win, 0, 2, header );
     mvwaddstr( win, 1, col_left[0], "Artist" );
     mvwaddstr( win, 1, col_left[1], "Title" );
     mvwaddstr( win, 1, col_left[2], "Album" );
@@ -453,11 +490,17 @@ void draw_playlist( void ) {
     /* Reset item color */
     wattroff( win, text_color );
 
+    if( have_focus ) {
+        wattron( win, COLOR_PAIR(TEXT_WHITE) | A_BOLD );
+        mvwprintw( win, 0, 1, "*" );
+        wattroff( win, COLOR_PAIR(TEXT_WHITE) | A_BOLD );
+    }
+
     /* Setup row information */
     list_height = win_height - 3;
 
     /* Process Playlist */
-    if( song_queue.size <= 0 ) {
+    if( queue->size <= 0 ) {
         wattron( win, COLOR_PAIR(TEXT_RED) );
         if( display_info.state == SYSTEM_LOADING ) {
             mvwprintw( win, 3, (win_width / 2) - 14, "-- Database loading...... --" );
@@ -466,24 +509,22 @@ void draw_playlist( void ) {
         }
         wattroff( win, COLOR_PAIR(TEXT_RED) );
     } else {
-        song_queue_entry_t *cur_song_queue_entry;
+        song_queue_entry_t *cur_queue_entry;
 
-        /* If our size is less than it will eventually be */
-        if( song_queue.size < song_queue.wanted_size ) {
-            mvwprintw( win, 0, 10, "(loading)");
-        /* otherwise, we are as big as we are going to get, so
+        /* If our size is bigger than it will eventually be
+           we are as big as we are going to get, so
            if our selection is too big clip it */
-        } else if ( song_queue.selected >= song_queue.size ) {
-            song_queue.selected = song_queue.size - 1;
+        if ( queue->size >= queue->wanted_size && queue->selected >= queue->size ) {
+            queue->selected = queue->size - 1;
         }
 
         /* Update the number of rows to display */
-        if( song_queue.size <= list_height ) {
-            list_height = song_queue.size;
+        if( queue->size <= list_height ) {
+            list_height = queue->size;
             start_index = 0;
         } else {
-            start_index = song_queue.selected - list_height / 2;
-            max_size = song_queue.size > song_queue.wanted_size ? song_queue.size : song_queue.wanted_size;
+            start_index = queue->selected - list_height / 2;
+            max_size = queue->size > queue->wanted_size ? queue->size : queue->wanted_size;
 
             /* Check boundries */
             if( start_index < 0 ) {
@@ -494,54 +535,54 @@ void draw_playlist( void ) {
 
             /* Print Scroll Arrows */
             if( start_index > 0 ) {
-                mvwaddch( win, 2, win_width - 2, ACS_UARROW );
+                mvwaddch( win, 2, win_width - 2, '^' );
             }
-            if( (start_index + list_height) < song_queue.size ) {
-                mvwaddch( win, win_height - 2, win_width - 2, ACS_DARROW );
+            if( (start_index + list_height) < queue->size ) {
+                mvwaddch( win, win_height - 2, win_width - 2, 'v' );
             }
         }
 
         /*
          * Display playlist
          */
-        cur_song_queue_entry = song_queue.head;
+        cur_queue_entry = queue->head;
         select_color = COLOR_PAIR( TEXT_BLUE_SELECTED ) | A_BOLD;
 
         /* Draw Selected Line */
-        if( song_queue.selected >= 0 ) {
+        if( queue->selected >= 0 && have_focus ) {
             wattron( win, COLOR_PAIR(TEXT_BLUE_BACKGROUND) );
-            wmove( win, song_queue.selected - start_index + 2, 1 );
+            wmove( win, queue->selected - start_index + 2, 1 );
             whline( win, 0, win_width - 2 );
             wattroff( win, COLOR_PAIR(TEXT_BLUE_BACKGROUND) );
         }
 
         /* Move to the correct queue entry */
-        for( i = 0; i < start_index && cur_song_queue_entry != NULL; i++ ) {
-            cur_song_queue_entry = cur_song_queue_entry->next;
+        for( i = 0; i < start_index && cur_queue_entry != NULL; i++ ) {
+            cur_queue_entry = cur_queue_entry->next;
         }
 
         /* Print the queue */
         for( i = 0; i < list_height; i++ ) {
             /* Allow for incorrect size information */
-            if( cur_song_queue_entry == NULL ) {
+            if( cur_queue_entry == NULL ) {
                 break;
             }
 
-            if( (i + start_index) == song_queue.selected ) {
+            if( (i + start_index) == queue->selected && have_focus ) {
                 wattron( win, select_color );
             }
 
             /* Print playlist information */
-            draw_meta_string( win, cur_song_queue_entry->song_info, "artist", i + 2, col_left[0], col_width );
-            draw_meta_string( win, cur_song_queue_entry->song_info, "title", i + 2, col_left[1], col_width );
-            draw_meta_string( win, cur_song_queue_entry->song_info, "album", i + 2, col_left[2], col_width );
+            draw_meta_string( win, cur_queue_entry->song_info, "artist", i + 2, col_left[0], col_width );
+            draw_meta_string( win, cur_queue_entry->song_info, "title", i + 2, col_left[1], col_width );
+            draw_meta_string( win, cur_queue_entry->song_info, "album", i + 2, col_left[2], col_width );
 
-            if( (i + start_index) == song_queue.selected ) {
+            if( (i + start_index) == queue->selected && have_focus ) {
                 wattroff( win, select_color );
             }
 
             /* Load the next entry */
-            cur_song_queue_entry = cur_song_queue_entry->next;
+            cur_queue_entry = cur_queue_entry->next;
         }
     }
 
@@ -683,6 +724,7 @@ void draw_info( void ) {
     int i;
     double rating;
     int play_count, skip_count;
+    song_queue_t *queue = NULL;
     song_queue_entry_t *queue_entry;
     song_info_t *song;
     char *filename;
@@ -705,29 +747,36 @@ void draw_info( void ) {
     mvwprintw( win, 0, 2, "Status" );
 
     /* Determine which song to print */
-    if( song_queue.selected < 0 ) {
-        /* selected is the now playing window */
-        song = player_info.song;
-    } else {
-        /* currently not selecting anything (delete at the end of the list) */
-        if( song_queue.size - 1 < song_queue.selected ) {
-            song = NULL;
-        } else {
-            /* Otherwise go and find the entry on the queue */
-            queue_entry = song_queue.head;
-            for( i = 0; i < song_queue.selected; i++ ) {
-                queue_entry = queue_entry->next;
-                if( queue_entry == NULL ) {
-                    /* shouldn't happen */
-                    break;
-                }
+    switch( display_info.focus ) {
+        case WIN_NOW_PLAYING:
+            /* selected is the now playing window */
+            song = player_info.song;
+            break;
+        case WIN_PLAYLIST:
+            queue = &song_queue;
+        case WIN_PASTLIST:
+            if( queue == NULL ) {
+                queue = &past_queue;
             }
-            if( queue_entry == NULL ) {
+            /* currently not selecting anything (delete at the end of the list) */
+            if( queue->size - 1 < queue->selected ) {
                 song = NULL;
             } else {
-                song = queue_entry->song_info;
+                /* Otherwise go and find the entry on the queue */
+                queue_entry = queue->head;
+                for( i = 0; i < queue->selected; i++ ) {
+                    queue_entry = queue_entry->next;
+                }
+                if( queue_entry == NULL ) {
+                    song = NULL;
+                } else {
+                    song = queue_entry->song_info;
+                }
             }
-        }
+            break;
+        default:
+            song = NULL;
+            break;
     }
 
     /* Set the selected song's statistics */

@@ -34,7 +34,7 @@ void *display_monitor( void *input_data );
 /* Draw Sections of the Screen */
 void draw_screen( void );
 void draw_now_playing( void );
-void draw_playlist( void );
+void draw_list( int which_window );
 void draw_help( void );
 void draw_info( void );
 void draw_spectrum( void );

@@ -213,8 +213,10 @@ void *fifo_monitor( void *input_data ) {
  * Force a clear of the screen
  */
 void do_clear( void ) {
+    squash_lock( display_info.lock );
     clear();
     refresh();
+    squash_unlock( display_info.lock );
 }
 
 /*
@@ -374,58 +376,84 @@ void do_arrow( enum direction_e direction ) {
     int delta;
     WINDOW *win;
     int xsize = 0, ysize = 0;
+    int *selected = NULL, *max_size = NULL;
 
     squash_lock( display_info.lock );
-    squash_rlock( database_info.lock );
-    squash_lock( song_queue.lock );
-    if( (win = display_info.window[WIN_PLAYLIST].window) != NULL ) {
-            getmaxyx( win, ysize, xsize );
-        ysize -= 3;
-        if( ysize < 0) {
-            ysize = 0;
-        }
-    }
-    switch( direction ) {
-        case UP:
-            delta = -1;
+    switch( display_info.focus ) {
+        case WIN_NOW_PLAYING:
             break;
-        case DOWN:
-            delta = +1;
+        case WIN_PLAYLIST:
+            squash_lock( song_queue.lock );
+            selected = &song_queue.selected;
+            max_size = song_queue.wanted_size > song_queue.size ? &song_queue.wanted_size : &song_queue.size;
             break;
-        case PAGE_UP:
-            delta = -ysize/2;
-            break;
-        case PAGE_DOWN:
-            delta = +ysize/2;
-            break;
-        case HOME:
-            delta = 0;
-            song_queue.selected = 0;
-            break;
-        case END:
-            song_queue.selected = 0;
-            delta = song_queue.wanted_size > song_queue.size ? song_queue.wanted_size : song_queue.size;
+        case WIN_PASTLIST:
+            squash_lock( past_queue.lock );
+            selected = &past_queue.selected;
+            max_size = &past_queue.size;
             break;
         default:
-            return;
+            break;
     }
-    if( song_queue.selected < 0) {
-        song_queue.selected ^= -1;
-    } else {
-        song_queue.selected = song_queue.selected + delta;
 
-        if( song_queue.selected < 0 ) {
-            song_queue.selected = 0;
+    if( display_info.focus == WIN_PLAYLIST || display_info.focus == WIN_PASTLIST ) {
+
+        if( (win = display_info.window[display_info.focus].window) != NULL ) {
+                getmaxyx( win, ysize, xsize );
+            ysize -= 3;
+            if( ysize < 0) {
+                ysize = 0;
+            }
+        }
+        switch( direction ) {
+            case UP:
+                delta = -1;
+                break;
+            case DOWN:
+                delta = +1;
+                break;
+            case PAGE_UP:
+                delta = -ysize/2;
+                break;
+            case PAGE_DOWN:
+                delta = +ysize/2;
+                break;
+            case HOME:
+                delta = 0;
+                *selected = 0;
+                break;
+            case END:
+                *selected = 0;
+                delta = *max_size-1;
+                break;
+            default:
+                delta = 0;
+                break;
+        }
+        *selected = *selected + delta;
+
+        if( *selected < 0 ) {
+            *selected = 0;
         } else {
-            int size = song_queue.wanted_size > song_queue.size ? song_queue.wanted_size : song_queue.size;
-            if( song_queue.selected >= size ) {
-                song_queue.selected = size - 1;
+            if( *selected >= *max_size ) {
+                *selected = *max_size - 1;
             }
         }
     }
 
-    squash_unlock( song_queue.lock );
-    squash_runlock( database_info.lock );
+    switch( display_info.focus ) {
+        case WIN_NOW_PLAYING:
+            break;
+        case WIN_PLAYLIST:
+            squash_unlock( song_queue.lock );
+            break;
+        case WIN_PASTLIST:
+            squash_unlock( past_queue.lock );
+            break;
+        default:
+            break;
+    }
+
     squash_unlock( display_info.lock );
     squash_broadcast( display_info.changed );
 }
@@ -435,35 +463,75 @@ void do_arrow( enum direction_e direction ) {
  */
 void do_delete( void ) {
     int i;
-    song_queue_entry_t *song_queue_entry, *song_queue_last_entry;
+    song_queue_entry_t *queue_entry, *queue_last_entry, **head, **tail;
+    int *selected, *size;
 
+    squash_lock( display_info.lock );
     squash_wlock( database_info.lock );
-    squash_lock( song_queue.lock );
-    if( song_queue.selected >= song_queue.size || song_queue.selected < 0 ) {
-        squash_runlock( database_info.lock );
-        squash_unlock( song_queue.lock );
-        return;
+    switch( display_info.focus ) {
+        case WIN_PLAYLIST:
+            squash_lock( song_queue.lock );
+            selected = &song_queue.selected;
+            size = &song_queue.size;
+            head = &song_queue.head;
+            tail = &song_queue.tail;
+            queue_entry = song_queue.head;
+            queue_last_entry = NULL;
+            break;
+        case WIN_PASTLIST:
+            /* ignore deletes on past list */
+            squash_wunlock( database_info.lock );
+            squash_unlock( display_info.lock );
+            return;
+            /*
+            squash_lock( past_queue.lock );
+            selected = &past_queue.selected;
+            size = &past_queue.size;
+            head = &past_queue.head;
+            tail = &past_queue.tail;
+            queue_entry = past_queue.head;
+            queue_last_entry = NULL;
+            break;
+            */
+        default:
+            squash_wunlock( database_info.lock );
+            squash_unlock( display_info.lock );
+            return;
     }
-    song_queue_last_entry = NULL;
-    song_queue_entry = song_queue.head;
-    for( i = 0; i < song_queue.selected; i++ ) {
-        song_queue_last_entry = song_queue_entry;
-        song_queue_entry = song_queue_entry->next;
+
+    if( *selected < *size && *selected >= 0 ) {
+        for( i = 0; i < *selected; i++ ) {
+            queue_last_entry = queue_entry;
+            queue_entry = queue_entry->next;
+        }
+        if( queue_last_entry != NULL ) {
+            queue_last_entry->next = queue_entry->next;
+        }
+        if( queue_entry == *head ) {
+            *head = queue_entry->next;
+        }
+        if( queue_entry == *tail ) {
+            *tail = queue_last_entry;
+        }
+        feedback( queue_entry->song_info , -1);
+        squash_free( queue_entry );
+        *size = *size - 1;
     }
-    if( song_queue_last_entry != NULL ) {
-        song_queue_last_entry->next = song_queue_entry->next;
+    switch( display_info.focus ) {
+        case WIN_PLAYLIST:
+            squash_unlock( song_queue.lock );
+            break;
+        case WIN_PASTLIST:
+            /* ignore deletes on past list */
+            /*
+            squash_unlock( past_queue.lock );
+            */
+            break;
+        default:
+            break;
     }
-    if( song_queue_entry == song_queue.head ) {
-        song_queue.head = song_queue_entry->next;
-    }
-    if( song_queue_entry == song_queue.tail ) {
-        song_queue.tail = song_queue_last_entry;
-    }
-    feedback( song_queue_entry->song_info , -1);
-    squash_free( song_queue_entry );
-    song_queue.size--;
-    squash_unlock( song_queue.lock );
     squash_wunlock( database_info.lock );
+    squash_unlock( display_info.lock );
     squash_broadcast( song_queue.not_full );
     squash_broadcast( display_info.changed );
 }
@@ -472,10 +540,28 @@ void do_delete( void ) {
  * Handle Tab event
  */
 void do_tab( void ) {
-    squash_lock( song_queue.lock );
-    song_queue.selected ^= -1;
-    squash_unlock( song_queue.lock );
-    squash_broadcast( display_info.changed );
+    squash_lock( display_info.lock );
+    switch( display_info.focus ) {
+        case WIN_NOW_PLAYING:
+            display_info.focus = WIN_PLAYLIST;
+            display_info.window[ WIN_PASTLIST ].state = WIN_STATE_HIDDEN;
+            display_info.window[ WIN_PLAYLIST ].state = WIN_STATE_NORMAL;
+            break;
+        case WIN_PLAYLIST:
+            display_info.focus = WIN_PASTLIST;
+            display_info.window[ WIN_PASTLIST ].state = WIN_STATE_NORMAL;
+            display_info.window[ WIN_PLAYLIST ].state = WIN_STATE_HIDDEN;
+            break;
+        case WIN_PASTLIST:
+            display_info.focus = WIN_NOW_PLAYING;
+            display_info.window[ WIN_PASTLIST ].state = WIN_STATE_HIDDEN;
+            display_info.window[ WIN_PLAYLIST ].state = WIN_STATE_NORMAL;
+            break;
+        default:
+            break;
+    }
+    draw_screen();
+    squash_unlock( display_info.lock );
 }
 
 /*
@@ -486,34 +572,46 @@ void do_edit_command( void ) {
     char *filename = NULL;
     int i;
     int pid;
-    song_info_t *song;
+    song_info_t *song = NULL;
     song_queue_entry_t *cur_entry;
 
     squash_rlock( database_info.lock );
-    squash_lock( song_queue.lock );
-
-    if( song_queue.selected >= song_queue.size ) {
-        squash_unlock( song_queue.lock );
-        squash_runlock( database_info.lock );
-
-        return;
-    } else if( song_queue.selected < 0 ) {
-        squash_lock( player_info.lock );
-        song = player_info.song;
-        squash_unlock( player_info.lock );
-        squash_unlock( song_queue.lock );
-    } else {
-        cur_entry = song_queue.head;
-        for( i = 0; i < song_queue.selected; i++ ) {
-            cur_entry = cur_entry->next;
-        }
-
-        song = cur_entry->song_info;
-
-        squash_unlock( song_queue.lock );
+    squash_lock( display_info.lock );
+    switch( display_info.focus ) {
+        case WIN_NOW_PLAYING:
+            squash_lock( player_info.lock );
+            song = player_info.song;
+            squash_unlock( player_info.lock );
+            break;
+        case WIN_PLAYLIST:
+            squash_lock( song_queue.lock );
+            if( song_queue.selected < song_queue.size ) {
+                cur_entry = song_queue.head;
+                for( i = 0; i < song_queue.selected; i++ ) {
+                    cur_entry = cur_entry->next;
+                }
+                song = cur_entry->song_info;
+            }
+            squash_unlock( song_queue.lock );
+            break;
+        case WIN_PASTLIST:
+            squash_lock( past_queue.lock );
+            if( past_queue.selected < past_queue.size ) {
+                cur_entry = past_queue.head;
+                for( i = 0; i < past_queue.selected; i++ ) {
+                    cur_entry = cur_entry->next;
+                }
+                song = cur_entry->song_info;
+            }
+            squash_unlock( past_queue.lock );
+            break;
+        default:
+            break;
     }
+
     if( song == NULL ) {
         squash_runlock( database_info.lock );
+        squash_unlock( display_info.lock );
         return;
     }
 
@@ -525,7 +623,6 @@ void do_edit_command( void ) {
         editor = "vi";
     }
 
-    squash_lock( display_info.lock );
     endwin();
     reset_shell_mode();
 

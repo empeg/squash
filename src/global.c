@@ -47,7 +47,8 @@ config_keys_t config_keys[ CONFIG_KEY_COUNT ] = {
     { "Global", "Log_Filename", (void *)&config.squash_log_path, TYPE_STRING },
 #endif
     { "Playlist", "Filename", (void *)&config.playlist_manager_playlist_path, TYPE_STRING },
-    { "Playlist", "Size", (void *)&config.playlist_manager_playlist_size, TYPE_INT }
+    { "Playlist", "Size", (void *)&config.playlist_manager_playlist_size, TYPE_INT },
+    { "Pastlist", "Size", (void *)&config.playlist_manager_pastlist_size, TYPE_INT }
 };
 
 
@@ -464,6 +465,7 @@ void init_config( void ) {
     /* Playlist Manager Options */
     config.playlist_manager_playlist_path = strdup("~/.squash_playlist");
     config.playlist_manager_playlist_size = 32;
+    config.playlist_manager_pastlist_size = 32;
 
     /* Debug Options */
 #ifdef DEBUG

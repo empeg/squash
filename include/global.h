@@ -49,12 +49,10 @@
 /*
  * Definitions
  */
-#define WIN_COUNT 5
-
 #ifdef DEBUG
-    #define CONFIG_KEY_COUNT 10
+    #define CONFIG_KEY_COUNT 11
 #else
-    #define CONFIG_KEY_COUNT 9
+    #define CONFIG_KEY_COUNT 10
 #endif
 
 /*
@@ -93,11 +91,13 @@ enum colors_e {
 };
 
 enum windows_e {
-    WIN_NOW_PLAYING = 0,
-    WIN_INFO = 1,
-    WIN_SPECTRUM = 2,
-    WIN_PLAYLIST = 3,
-    WIN_HELP = 4
+    WIN_NOW_PLAYING,
+    WIN_INFO,
+    WIN_SPECTRUM,
+    WIN_PASTLIST,
+    WIN_PLAYLIST,
+    WIN_HELP,
+    WIN_COUNT /* faux entry, not a real window */
 };
 
 /*
@@ -122,6 +122,7 @@ typedef struct config_s {
 
     char *playlist_manager_playlist_path;
     int playlist_manager_playlist_size;
+    int playlist_manager_pastlist_size;
 
 #ifdef DEBUG
     char *squash_log_path;
@@ -269,6 +270,7 @@ typedef struct display_info_s {
     pthread_cond_t changed;
     enum system_state_e state;
     win_info_t window[ WIN_COUNT ];
+    int focus;
 } display_info_t;
 
 /* Log information */
@@ -309,6 +311,7 @@ typedef struct spectrum_info_s {
  */
 display_info_t display_info;
 song_queue_t song_queue;
+song_queue_t past_queue;
 player_command_t player_command;
 player_info_t player_info;
 status_info_t status_info;

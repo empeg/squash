@@ -115,11 +115,11 @@ void *player( void *input_data ) {
                         break;
                 }
                 command_entry = command_entry->next;
-                    if( player_command.head == player_command.tail ) {
-                        player_command.tail = command_entry;
-                    }
-                    squash_free( player_command.head );
-                    player_command.head = command_entry;
+                if( player_command.head == player_command.tail ) {
+                    player_command.tail = command_entry;
+                }
+                squash_free( player_command.head );
+                player_command.head = command_entry;
                 player_command.size--;
             }
             squash_unlock( player_info.lock );
@@ -234,6 +234,12 @@ void *player( void *input_data ) {
 
                 break;
             case STATE_AFTER_SONG:
+                squash_rlock( database_info.lock );
+                squash_lock( past_queue.lock );
+                done_with_song_info( cur_song_info );
+                squash_unlock( past_queue.lock );
+                squash_runlock( database_info.lock );
+
                 /* Close the decoder */
                 song_functions[ cur_song_type ].close( cur_decoder_data );
 
@@ -281,6 +287,48 @@ song_info_t *get_next_song_info( void ) {
 
     /* Return the information */
     return next_song;
+}
+
+/*
+ * Puts song on the past_queue
+ */
+void done_with_song_info( song_info_t *song ) {
+    song_queue_entry_t *cur_queue_entry, *cur_queue_last_entry;
+    int i;
+
+    squash_malloc( cur_queue_entry, sizeof( song_queue_entry_t ) );
+
+    cur_queue_entry->song_info = song;
+    cur_queue_entry->next = past_queue.head;
+
+    past_queue.head = cur_queue_entry;
+    if( past_queue.tail == NULL ) {
+        past_queue.tail = cur_queue_entry;
+    }
+
+    past_queue.size++;
+
+    if( past_queue.size > past_queue.wanted_size ) {
+        cur_queue_entry = past_queue.head;
+        cur_queue_last_entry = NULL;
+        for( i = 0; i < past_queue.wanted_size; i++ ) {
+            cur_queue_last_entry = cur_queue_entry;
+            cur_queue_entry = cur_queue_entry->next;
+        }
+        past_queue.tail = cur_queue_last_entry;
+        past_queue.tail->next = NULL;
+
+        while( cur_queue_entry != NULL ) {
+            cur_queue_last_entry = cur_queue_entry;
+            cur_queue_entry = cur_queue_entry->next;
+
+            squash_free( cur_queue_last_entry );
+        }
+        past_queue.size = past_queue.wanted_size;
+        if( past_queue.size == 0 ) {
+           past_queue.head = NULL;
+        }
+    }
 }
 
 /*

@@ -32,6 +32,7 @@ extern song_functions_t song_functions[];
  */
 void *player( void *input_data );
 song_info_t *get_next_song_info( void );
+void done_with_song_info( song_info_t *song );
 int detect_silence( frame_data_t frame_data, unsigned int *silence_duration );
 void set_now_playing_info( song_info_t *song, long duration );
 double *get_spectrum(char *pcm_data, int pcm_length);

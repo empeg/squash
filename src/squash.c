@@ -77,6 +77,7 @@ int main( int argc, char *argv[] ) {
     /* Initilize the display */
     display_init();
     display_info.state = SYSTEM_LOADING;
+    display_info.focus = WIN_NOW_PLAYING;
 
     /* Initialize the windows */
     window_init();
@@ -104,9 +105,16 @@ int main( int argc, char *argv[] ) {
     /* Initialize Song Queue */
     song_queue.head = NULL;
     song_queue.tail = NULL;
-    song_queue.selected = -1;
+    song_queue.selected = 0;
     song_queue.size = 0;
-    song_queue.wanted_size = 0;
+    song_queue.wanted_size = 0; /* set by database startup thread */
+
+    /* Initialize Past Queue */
+    past_queue.head = NULL;
+    past_queue.tail = NULL;
+    past_queue.selected = 0;
+    past_queue.size = 0;
+    past_queue.wanted_size = config.playlist_manager_pastlist_size;
 
     /* Initialize the now playing information */
     player_command.head = NULL;
