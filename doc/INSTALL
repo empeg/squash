@@ -17,5 +17,10 @@ contains your music.  Note you need to run import_music.rb from the same path
 as the file musicdb_lib.rb .  Or you can move musicdb_lib.rb into a directory
 in your RUBYPATH.
 
+Additionally, support for reading meta information from OGG files directly has
+been added recently.  If you only have OGG files you can be lazy and not run
+import_music.rb .  MP3 files do not have this support because it is much harder
+to add, and so I'm not delaying the release of other features for it.
+
 Now you can run squash.  Please enjoy.
 

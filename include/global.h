@@ -383,5 +383,7 @@ bool parse_file( const char *file_name, void(*add_data)(void*, char*, char*, cha
 void set_config( void *data, char *header, char *key, char *value );
 void init_config( void );
 char *copy_string( const char *start, const char *end );
+char *build_fullfilename( song_info_t *song, enum basename_type_e type );
+void create_path( char *dir );
 
 #endif

@@ -375,65 +375,6 @@ void save_meta_data( song_info_t *song, FILE *file ) {
     fprintf( file, "\n" );
 }
 
-char *build_fullfilename( song_info_t *song, enum basename_type_e type ) {
-    int length;
-    int ext;
-    char *filename;
-
-    if( song == NULL ) {
-        return NULL;
-    }
-
-    length = strlen(song->basename[type]) + strlen(song->filename) + 2;
-    if( type != BASENAME_SONG ) {
-        /* TODO: fix this with a table */
-        if( type == BASENAME_META ) {
-            ext = TYPE_META;
-        } else {
-            ext = TYPE_STAT;
-        }
-        length += strlen(db_extensions[ext].extension) + 1;
-
-        squash_malloc( filename, length);
-        snprintf( filename, length, "%s/%s.%s", song->basename[type], song->filename, db_extensions[ext].extension );
-    } else {
-        squash_malloc( filename, length);
-        snprintf( filename, length, "%s/%s", song->basename[type], song->filename );
-    }
-
-    return filename;
-}
-
-/*
- * creates a directory tree.  note that dir is temporarily modified, but it's
- * value is restored by the end of the routine.
- */
-void create_path( char *dir ) {
-    char *cur;
-    int result;
-
-    cur = dir;
-    while( *cur != '\0' ) {
-        if( *cur == '/' ) {
-            if( cur - dir > 0 ) {
-                *cur = '\0';
-
-                result = mkdir( dir, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH );
-                if( result != 0 && errno != EEXIST ) {
-                    squash_error("Could not create info file directory '%s' (%d)", dir, errno );
-                }
-                *cur = '/';
-            }
-        }
-        cur++;
-    }
-
-    result = mkdir( dir, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH );
-    if( result != 0 && errno != EEXIST ) {
-        squash_error("Could not create info file directory '%s' (%d)", dir, errno );
-    }
-}
-
 /*
  * Loads the metadata for a song from the disk
  */
@@ -452,13 +393,15 @@ void load_meta_data( song_info_t *song, enum meta_type_e which ) {
 
     metaname = build_fullfilename( song, db_extensions[which].which_basename );
 
-    /* Parse the file */
-    if( config.db_overwriteinfo && config.db_saveinfo ) {
+    /* Parse the file unless we want to reload/save from the original song file */
+    if( config.db_overwriteinfo && config.db_saveinfo && which == TYPE_META ) {
         success = false;
     } else {
         success = parse_file( metaname, db_extensions[which].add_data, (void *)song );
     }
 
+    /* If we didn't load from the stat/info file, and we have a info file,
+     * try to load it from the original song file */
     if( !success && which == TYPE_META ) {
         song_type = get_song_type( song->filename );
 
@@ -468,6 +411,7 @@ void load_meta_data( song_info_t *song, enum meta_type_e which ) {
             if( song_type == TYPE_OGG ) {
                 ogg_load_meta( (void *)song, filename );
             } else {
+                /* This routine does nothing right now */
                 mp3_load_meta( (void *)song, filename );
             }
             squash_free( filename );
@@ -482,7 +426,8 @@ void load_meta_data( song_info_t *song, enum meta_type_e which ) {
                     squash_free( dirname );
                 }
 
-                /* check to see if the file already exists */
+                /* check to see if the file already exists and don't save unless
+                 * we are supposed to overwrite */
                 if( stat( metaname, &file_stat ) != 0 || config.db_overwriteinfo ) {
                     /* If you can't open the file bomb */
                     if( (meta_file = fopen(metaname, "w")) == NULL ) {
@@ -506,7 +451,11 @@ void load_all_meta_data( enum meta_type_e which ) {
     int i;
     for( i = 0; i < database_info.song_count; i++ ) {
         squash_wlock( database_info.lock );
+        /* If the type is meta, we need to be careful */
         if( which == TYPE_META ) {
+            /* if we haven't loaded before, set the key count to 0,
+             * otherwise, skip loading this song (since it has already
+             * been loaded */
             if( database_info.songs[i].meta_key_count == -1 ) {
                 database_info.songs[i].meta_key_count = 0;
             } else {
@@ -531,6 +480,10 @@ void insert_meta_data( void *data, char *header, char *key, char *value ) {
 
     /* Make sure we were given at least a song and a key */
     if( (song == NULL) || (key == NULL) ) {
+        /* shouldn't happen, but let's be safe */
+        if( value != NULL ) {
+            squash_free( value );
+        }
         return;
     }
 
@@ -576,6 +529,10 @@ void set_stat_data( void *data, char *header, char *key, char *value ) {
 
     /* Make sure we were given at least a song and a key */
     if( (song == NULL) || (key == NULL) ) {
+        /* shouldn't happen, but let's be safe */
+        if( value != NULL ) {
+            squash_free( value );
+        }
         return;
     }
 
@@ -590,6 +547,9 @@ void set_stat_data( void *data, char *header, char *key, char *value ) {
     } else if( strncasecmp("skip_count", key, 11) == 0 ) {
         song->stat.skip_count = int_value;
     }
+
+    squash_free( key );
+    squash_free( value );
 }
 
 /*

@@ -20,16 +20,19 @@ Picks better songs more frequently than worse songs.
 Decides what is better and worse automatically.
 Avoids picking the same song repeatedly.
 Cool (text) graphical analyzer.
-Standard meta information (Artist, etc.) stored in seperate file.
+Standard meta information (Artist, etc.) stored in seperate file*.
 Statistics meta information (for picking songs) also stored in
-seperate file.
+seperate file*.
 FIFO control file, for external control (for example, joysticks).
 
 Future Features:
 Support for empeg devices (a StrongARM based car stereo).
-Allow meta information to be stored in separate filesystem trees.
 Allow selection of what songs the player picks from (rather than the
 entire collection).
+
+* For ogg files, reading can be done directly so you do not have to
+store this separate file.  Also the files may be stored in separate
+directories.  mp3 direct tag reading support may be added in the future.
 
 Some technical details:
 
@@ -59,7 +62,10 @@ Please remember to run make clean before using a new set of options.
 Installation:
 
 Please see the doc/INSTALL file for details.  squash cannot just be
-run.  You must first run some scripts to extract meta information.
+run.  You must at least create a configuration file to specify where
+your music is.  Additionally if you have any mp3's you must first run
+some scripts to extract meta information.  (You may want to run these
+scripts even if you have only ogg files).
 
 Squash is written by Adam Luter, copyright 2003.  Thanks for John
 Preston for support, advice, computer usage, caffiene and a good

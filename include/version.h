@@ -21,5 +21,5 @@
  */
 
 #ifndef SQUASH_VERSION
-#define SQUASH_VERSION "0.6"
+#define SQUASH_VERSION "0.7"
 #endif

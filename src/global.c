@@ -27,7 +27,7 @@
 
 /* File Extensions to use. */
 const db_extension_info_t db_extensions[] = {
-    {"info", BASENAME_META, insert_meta_data, NULL, NULL },
+    {"info", BASENAME_META, insert_meta_data, save_meta_data, NULL },
     {"stat", BASENAME_STAT, set_stat_data, save_stat_data, is_stat_data_changed}
 };
 const int db_extensions_size = sizeof( db_extensions ) / sizeof( db_extensions[0] );
@@ -532,4 +532,67 @@ char *copy_string( const char *start, const char *end ) {
     /* Return the new string */
     return new_string;
 }
+
+/*
+ * This combines the basename of a song with the song's filename
+ */
+char *build_fullfilename( song_info_t *song, enum basename_type_e type ) {
+    int length;
+    int ext;
+    char *filename;
+
+    if( song == NULL ) {
+        return NULL;
+    }
+
+    length = strlen(song->basename[type]) + strlen(song->filename) + 2;
+    if( type != BASENAME_SONG ) {
+        /* TODO: fix this with a table */
+        if( type == BASENAME_META ) {
+            ext = TYPE_META;
+        } else {
+            ext = TYPE_STAT;
+        }
+        length += strlen(db_extensions[ext].extension) + 1;
+
+        squash_malloc( filename, length);
+        snprintf( filename, length, "%s/%s.%s", song->basename[type], song->filename, db_extensions[ext].extension );
+    } else {
+        squash_malloc( filename, length);
+        snprintf( filename, length, "%s/%s", song->basename[type], song->filename );
+    }
+
+    return filename;
+}
+
+/*
+ * creates a directory tree.  note that dir is temporarily modified, but it's
+ * value is restored by the end of the routine.
+ */
+void create_path( char *dir ) {
+    char *cur;
+    int result;
+
+    cur = dir;
+    while( *cur != '\0' ) {
+        if( *cur == '/' ) {
+            if( cur - dir > 0 ) {
+                *cur = '\0';
+
+                result = mkdir( dir, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH );
+                if( result != 0 && errno != EEXIST ) {
+                    squash_error("Could not create info file directory '%s' (%d)", dir, errno );
+                }
+                *cur = '/';
+            }
+        }
+        cur++;
+    }
+
+    result = mkdir( dir, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH );
+    if( result != 0 && errno != EEXIST ) {
+        squash_error("Could not create info file directory '%s' (%d)", dir, errno );
+    }
+}
+
 
