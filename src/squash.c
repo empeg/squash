@@ -28,6 +28,8 @@
 #include "spectrum.h"           /* for spectrum_monitor() */
 #ifdef EMPEG
 #include "vfdlib.h"             /* for exit status display */
+#include <sys/ioctl.h>          /* for ioctl() */
+#include "sys/soundcard.h"      /* for _SIO*() macros */
 #endif
 #include "squash.h"
 
@@ -65,6 +67,18 @@ int main( int argc, char *argv[] ) {
         log_info.log_file = fopen( config.squash_log_path, "w" );
     #endif
     squash_log( "Log initialized" );
+#endif
+
+#ifdef EMPEG
+    {   /* set the mixer to half-way (this will be move out of squash later) */
+        int mixer;
+        int raw_vol = 50 + (50 << 8);
+        if ((mixer = open("/dev/mixer", O_RDWR)) == -1) {
+            fprintf(stderr, "Can't open /dev/mixer");
+            exit(1);
+        }
+        ioctl( mixer, _SIOWR('M', 0, int), &raw_vol );
+    }
 #endif
 
     /* TODO: Move this it's own procedure.  What should be

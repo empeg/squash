@@ -29,7 +29,7 @@
 #include <fcntl.h> /* for open() */
 #include <unistd.h> /* for write() */
 #include <sys/ioctl.h> /* for ioctl() */
-#include "sys/soundcard.h" /* for SOUND_MASK_PCM */
+#include "sys/soundcard.h" /* for SOUND_MASK_PCM and _SIO*() macros */
 #define EMPEG_AUDIO_DEVICE        "/dev/audio"
 #define EMPEG_AUDIO_BUFFER_SIZE   4608
 #define EMPEG_MIXER_DEVICE        "/dev/mixer"
@@ -89,6 +89,7 @@ sound_device_t *sound_open( sound_format_t format ) {
         squash_error("Can't turn off mute");
     }
 
+    /* This reads the current volume stored in the mixer. */
     ioctl( t->mixer, _SIOR('M', 0, int), &raw_vol );
     t->volume[0] = raw_vol & 0xFF;
     t->volume[1] = (raw_vol >> 8) & 0xFF;

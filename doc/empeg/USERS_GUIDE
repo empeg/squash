@@ -26,3 +26,12 @@ find the_music -type f \( -iname '*.mp3' -or -iname '*.ogg' \) -printf
 The masterlist must only contain existing files, and these files must
 be either mp3s or oggs.  Otherwise squash will probably bomb.
 
+IMPORTANT NOTE:  The squash currently needs to have the media drive mounted
+read write.  If you do not like this, you can turn off the statistics engine
+with the readonly option.
+
+Also, squash does not yet turn the empeg off.  In order to turn off the empeg
+unit first hit the down key to turn off squash.  Wait a few seconds, then
+pull the empeg unit out of it's cradle.  Replace the empeg, and it should stay
+off.
+
