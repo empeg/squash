@@ -2,17 +2,27 @@ This document describes how to install the libraries needed to get squash
 running on an empeg.
 
 I choose to install the libraries by hand.  The libraries needed are:
-libmad, tremor (libivorbisdec).  You can get the libraries needed at
-these urls:
+libmad, tremor (libivorbisdec) and libFLAC (which also needs libogg).
+You can get the libraries needed at these urls:
 
 ftp://ftp.mars.org/pub/mpeg/libmad-0.15.0b.tar.gz
 http://www.xiph.org/ogg/vorbis/download/tremor_cvs_snapshot.tgz
+http://dl.sourceforge.net/sourceforge/flac/flac-1.1.0.tar.gz
+http://www.xiph.org/ogg/vorbis/download/libogg-1.0.tar.gz
 
 For libmad use (and then make && make install):
 ./configure --build=i686-linux-gnu --host=arm-linux --prefix=/usr/local/i686-linux-gnu --enable-static --disable-shared
 
 For tremor (libivorbisdec) use (and then make && make install):
 ./autogen.sh --build=i686-linux-gnu --host=arm-linux --prefix=/usr/local/i686-linux-gnu --enable-static --disable-shared
+
+For libogg (needed for libFLAC), run these two commands (and then make
+&& make install):
+./configure --build=i686-linux-gnu --host=arm-linux --prefix=/usr/local/i686-linux-gnu --enable-static --disable-shared
+find -name Makefile -exec perl -i -pe's/CC = gcc/CC = arm-linux-gcc/' "{}" \;
+
+For libFLAC use (and then make && make install):
+LDFLAGS=-L/usr/c++/lib ./configure --build=i686-linux-gnu --host=arm-linux --prefix=/usr/local/i686-linux-gnu --enable-static --disable-shared
 
 I have not tried to install libncurses or libfftw.  If you would like
 to try this, you may reenable these features in the Makefile (it's

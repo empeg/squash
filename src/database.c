@@ -90,13 +90,11 @@ void *setup_database( void *data ) {
     squash_signal( database_info.stats_finished );
     squash_log("stats loaded");
 
-    /*
-     * Only load all info files if we are not on empeg (makes skips a little frequent at
-     * start-up, and we don't have any reason them all loaded right now).
-     */
-#ifndef EMPEG
-//    load_all_meta_data( TYPE_META ); /* Load info files */
-//    squash_log("metadata loaded");
+    /* This isn't necessary anymore, since we load metadata on playlist load instead.
+     * (Will be needed again once searching has been added). */
+#if 0
+    load_all_meta_data( TYPE_META ); /* Load info files */
+    squash_log("metadata loaded");
 #endif
 
     return (void *)NULL;
@@ -595,6 +593,7 @@ void load_all_meta_data( enum meta_type_e which ) {
         }
         load_meta_data( &database_info.songs[i], which );
         squash_wunlock( database_info.lock );
+        sched_yield();
     }
 }
 

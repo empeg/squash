@@ -82,7 +82,7 @@ $id3v2_to_db = {
 "TCOM"=>"artist_composer",
 #"TMCL"=>"musicians", # this one is too weird
 #"TENC"=>"file_creator",
-"TYER"=>"year",
+"TYER"=>"date",
 
 # Derived and subjective properties
 "TBPM"=>"bpm",

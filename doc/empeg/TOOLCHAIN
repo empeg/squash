@@ -5,7 +5,7 @@ This document describes the steps necessary to install one on a debian
 system using debian's tools.
 
 1) Goto http://people.debian.org/~debacle/cross.html .  This guide
-worked for me and I will be following it.  The only problem I had with
+worked for me and I will be following it.  One problem I had with
 it was that he did not specify all packages that needed to be installed.
 I will try to mention those extra packages here.  I may have left some
 out, please let me know.
@@ -20,7 +20,14 @@ out, please let me know.
 
 6) cd /usr/src && tpkg-install-libc arm-linux
 
-7) cd gcc-arm-linux-* && DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc" debuild && debi
+7) cd gcc-arm-linux-* , then edit debian/rules make these two changes:
+    I) Under CONFARGS, change --enable-languages=c, to --enable-languages="c c++"
+    II) Under build: and #Add here commands..., add the line:
+        cp -a src/libstdc++-v3/config/os/{gnu-linux/bits,newlib/}
+    Note: These steps are necessary to build libFLAC support which requires a working
+          c++ toolchain.
+
+9) DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc" debuild && debi
 
 8) Rejoice, or if you have error messages bang head on monitor to summon
 the computer spirits of long past (perhaps they'll aid you, or maybe

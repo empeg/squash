@@ -264,13 +264,12 @@ void *player( void *input_data ) {
                 squash_unlock( player_info.lock );
                 break;
             case STATE_IN_SONG:
-                squash_lock( player_info.lock );
                 squash_lock(frame_buffer.lock);
                 if( frame_buffer.size > 0 ) {
                     frame_data_t cur_frame;
                     int x;
                     cur_frame = frame_buffer.frames[0];
-                    for( x = 1; x < PLAYER_MAX_BUFFER_SIZE; x++ ) {
+                    for( x = 1; x < frame_buffer.size; x++ ) {
                         frame_buffer.frames[x - 1] = frame_buffer.frames[x];
                     }
                     frame_buffer.size--;
@@ -297,9 +296,11 @@ void *player( void *input_data ) {
 
                         /* Signal display, if we haven't updated for a whole second */
                         if( cur_frame.position / 1000 != player_info.current_position / 1000 ) {
+                            squash_lock( player_info.lock );
                             squash_broadcast( display_info.changed );
+                            player_info.current_position = cur_frame.position;
+                            squash_unlock( player_info.lock );
                         }
-                        player_info.current_position = cur_frame.position;
 
                         cur_sound_device = player_info.device;  /* grab a copy of the device
                                                                  * (hope that the sound driver itself is thread safe */
@@ -309,16 +310,12 @@ void *player( void *input_data ) {
                         }
                         squash_free( cur_frame.pcm_data );
                     }
-                    squash_unlock( player_info.lock );
                     squash_broadcast( frame_buffer.restart );
                 } else {
-                    squash_log("nothing to play");
                     squash_broadcast( frame_buffer.restart );
                     squash_wait( frame_buffer.new_data, frame_buffer.lock );
                     squash_unlock( frame_buffer.lock );
-                    squash_unlock( player_info.lock );
                 }
-
                 break;
             case STATE_AFTER_SONG:
                 squash_rlock( database_info.lock );

@@ -97,9 +97,13 @@ enum song_type_e get_song_type( const char *base_name, const char *file_name ) {
             squash_log("Magically mp3-delicious");
             type = TYPE_MP3;
         } else if ( buf[0] == 'O' && buf[1] == 'g' && buf[2] == 'g' && buf[3] == 'S' ) {
+            squash_log("Magically ogg-delicious");
             type = TYPE_OGG;
         } else if ( buf[0] == 'f' && buf[1] == 'L' && buf[2] == 'a' && buf[3] == 'C' ) {
+            squash_log("Magically flac-delicious");
             type = TYPE_FLAC;
+        } else {
+            squash_log("Just ain't enough magic in the world");
         }
         fclose( file );
         squash_free( full_name );
