@@ -201,7 +201,6 @@ dirlist.each do |dir|
             out = IO.popen( "vorbiscomment -R -w -c - #{filename.sq}", "w" )
             db_info.each do |key, value|
                 out.puts "#{key}=#{value}"
-                puts "#{key}=#{value}"
             end
             out.close
         else
