@@ -41,6 +41,8 @@ meta_key_t *get_meta_data( song_info_t *song_info, char *meta_key );
 song_info_t *find_song_by_filename( char *filename );
 db_search_result_t find_matches( char *key, char *keyword );
 
+char *build_fullfilename( song_info_t *song, enum basename_type_e type );
+void create_path( char *dir );
 void load_meta_data( song_info_t *song, enum meta_type_e which );
 void load_all_meta_data( enum meta_type_e which );
 void save_song( song_info_t *song );

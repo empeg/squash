@@ -23,6 +23,8 @@
 #include "stat.h"       /* for start_song_picker() */
 #include "player.h"     /* for player_queue_command() */
 #include "display.h"    /* for draw_info() and draw_screen() */
+#include "play_ogg.h"   /* for ogg_load_meta() */
+#include "play_mp3.h"   /* for mp3_load_meta() */
 #include "database.h"
 
 /*
@@ -280,8 +282,8 @@ void clear_db() {
  * really does any work for the ".stat" files; not the ".info" files
  */
 void save_song( song_info_t *song ) {
-    int cur_file_length;
     char *cur_filename;
+    char *end, *dirname;
     FILE *cur_file;
     int i;
 
@@ -299,10 +301,16 @@ void save_song( song_info_t *song ) {
         }
 
         /* Construct a filename to save */
-        cur_file_length = strlen(song->basename[db_extensions[i].which_basename]) + strlen(song->filename) + strlen(db_extensions[i].extension) + 3;
-        squash_malloc( cur_filename, cur_file_length );
+        cur_filename = build_fullfilename( song, db_extensions[i].which_basename );
 
-        snprintf( cur_filename, cur_file_length, "%s/%s.%s", song->basename[db_extensions[i].which_basename], song->filename, db_extensions[i].extension);
+        /* find dir part */
+        end = strrchr( cur_filename, '/' );
+        if( end != NULL ) {
+            dirname = copy_string( cur_filename, end - 1 );
+            /* ensure path is created */
+            create_path( dirname );
+            squash_free( dirname );
+        }
 
         /* If you can't open the file bomb */
         if( (cur_file = fopen(cur_filename, "w")) == NULL ) {
@@ -342,37 +350,153 @@ void save_stat_data( song_info_t *song, FILE *file ) {
     fprintf( file, "play_count=%d\n", song->stat.play_count );
     fprintf( file, "skip_count=%d\n", song->stat.skip_count );
     fprintf( file, "repeat_counter=%d\n", song->stat.repeat_counter );
+    fprintf( file, "\n" );
 
     /* Reset the changed flag */
     song->stat.changed = FALSE;
 }
 
 /*
- * Loads the metadata for a song from the disk
+ * Save statistical info.  This is should be called by save_song()
  */
-void load_meta_data( song_info_t *song, enum meta_type_e which ) {
-    char *cur_file;
-    int cur_file_length;
+void save_meta_data( song_info_t *song, FILE *file ) {
+    int i, j;
 
-    /* Don't let them trick us! */
-    if( song == NULL || song->filename == NULL ) {
+    /* Some one is tricking us */
+    if( song == NULL || file == NULL ) {
         return;
     }
 
-    /* Determine the length of the filename to open */
-    cur_file_length = strlen(song->basename[db_extensions[which].which_basename]) + strlen(song->filename) + strlen(db_extensions[which].extension) + 3;
+    for(i = 0; i < song->meta_key_count; i++ ) {
+        for( j = 0; j < song->meta_keys[i].value_count; j++ ) {
+            fprintf( file, "%s=%s\n", song->meta_keys[i].key, song->meta_keys[i].values[j] );
+        }
+    }
+    fprintf( file, "\n" );
+}
 
-    /* Allocate memory to build the filename */
-    squash_malloc( cur_file, cur_file_length );
+char *build_fullfilename( song_info_t *song, enum basename_type_e type ) {
+    int length;
+    int ext;
+    char *filename;
 
-    /* Build the filename */
-    snprintf( cur_file, cur_file_length, "%s/%s.%s", song->basename[db_extensions[which].which_basename], song->filename, db_extensions[which].extension);
+    if( song == NULL ) {
+        return NULL;
+    }
+
+    length = strlen(song->basename[type]) + strlen(song->filename) + 2;
+    if( type != BASENAME_SONG ) {
+        /* TODO: fix this with a table */
+        if( type == BASENAME_META ) {
+            ext = TYPE_META;
+        } else {
+            ext = TYPE_STAT;
+        }
+        length += strlen(db_extensions[ext].extension) + 1;
+
+        squash_malloc( filename, length);
+        snprintf( filename, length, "%s/%s.%s", song->basename[type], song->filename, db_extensions[ext].extension );
+    } else {
+        squash_malloc( filename, length);
+        snprintf( filename, length, "%s/%s", song->basename[type], song->filename );
+    }
+
+    return filename;
+}
+
+/*
+ * creates a directory tree.  note that dir is temporarily modified, but it's
+ * value is restored by the end of the routine.
+ */
+void create_path( char *dir ) {
+    char *cur;
+    int result;
+
+    cur = dir;
+    while( *cur != '\0' ) {
+        if( *cur == '/' ) {
+            if( cur - dir > 0 ) {
+                *cur = '\0';
+
+                result = mkdir( dir, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH );
+                if( result != 0 && errno != EEXIST ) {
+                    squash_error("Could not create info file directory '%s' (%d)", dir, errno );
+                }
+                *cur = '/';
+            }
+        }
+        cur++;
+    }
+
+    result = mkdir( dir, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP|S_IROTH|S_IWOTH|S_IXOTH );
+    if( result != 0 && errno != EEXIST ) {
+        squash_error("Could not create info file directory '%s' (%d)", dir, errno );
+    }
+}
+
+/*
+ * Loads the metadata for a song from the disk
+ */
+void load_meta_data( song_info_t *song, enum meta_type_e which ) {
+    char *filename, *metaname, *dirname;
+    char *end;
+    enum song_type_e song_type;
+    bool success;
+    FILE *meta_file;
+    struct stat file_stat;
+
+    /* Don't let them trick us! */
+    if( song == NULL ) {
+        return;
+    }
+
+    metaname = build_fullfilename( song, db_extensions[which].which_basename );
 
     /* Parse the file */
-    parse_file( cur_file, db_extensions[which].add_data, (void *)song );
+    if( config.db_overwriteinfo && config.db_saveinfo ) {
+        success = false;
+    } else {
+        success = parse_file( metaname, db_extensions[which].add_data, (void *)song );
+    }
+
+    if( !success && which == TYPE_META ) {
+        song_type = get_song_type( song->filename );
+
+        if( song_type != TYPE_UNKNOWN ) {
+            filename = build_fullfilename( song, BASENAME_SONG );
+
+            if( song_type == TYPE_OGG ) {
+                ogg_load_meta( (void *)song, filename );
+            } else {
+                mp3_load_meta( (void *)song, filename );
+            }
+            squash_free( filename );
+
+            if( config.db_saveinfo ) {
+                /* find dir part */
+                end = strrchr( metaname, '/' );
+                if( end != NULL ) {
+                    dirname = copy_string( metaname, end - 1 );
+                    /* ensure path is created */
+                    create_path( dirname );
+                    squash_free( dirname );
+                }
+
+                /* check to see if the file already exists */
+                if( stat( metaname, &file_stat ) != 0 || config.db_overwriteinfo ) {
+                    /* If you can't open the file bomb */
+                    if( (meta_file = fopen(metaname, "w")) == NULL ) {
+                        squash_error( "Can't open file \"%s\" for writing", metaname );
+                    }
+                    save_meta_data( song, meta_file );
+                    fclose(meta_file);
+                }
+            }
+        }
+    }
 
     /* Free the file name */
-    squash_free( cur_file );
+    squash_free( metaname );
 }
 
 /*
@@ -429,6 +553,9 @@ void insert_meta_data( void *data, char *header, char *key, char *value ) {
         meta_key->key = key;
         meta_key->value_count = 0;
         meta_key->values = NULL;
+    } else {
+        /* Otherwise we already have a copy of key, so free this extra copy */
+        squash_free( key );
     }
 
     /* Increase size of space for the meta info */
@@ -499,8 +626,8 @@ void _load_file( char *filename ) {
         /* Update the counter */
         database_info.song_count++;
 
-        /* Display progress every 100 songs */
-        if( database_info.song_count % 100 == 0) {
+        /* Display progress every 500 songs */
+        if( database_info.song_count % 500 == 0) {
             draw_info();
         }
     }

@@ -21,6 +21,7 @@
  */
 
 #include "global.h"
+#include "database.h" /* for insert_meta_data */
 #include "play_ogg.h"
 
 /*
@@ -43,6 +44,8 @@ void *ogg_open( char *filename, sound_format_t *sound_format ) {
 
     /* Open the vorbis file */
     if( ov_open(file, &ogg_data->file, NULL, 0) != 0 ) {
+        squash_free( ogg_data );
+        fclose( file );
         squash_error( "Unable to open Vorbis file" );
     }
 
@@ -54,6 +57,48 @@ void *ogg_open( char *filename, sound_format_t *sound_format ) {
 
     /* Return data */
     return (void *)ogg_data;
+}
+
+/*
+ * Set a song's metadata based on vorbis comments,
+ */
+void ogg_load_meta( void *data, char *filename ) {
+    OggVorbis_File ogg_file;
+    vorbis_comment *comment;
+    FILE *file;
+    char *start, *end, *key, *value;
+    int i;
+
+    /* Open the song */
+    if( (file = fopen(filename, "r")) == NULL ) {
+        squash_error( "Unable to open file %s", filename );
+    }
+
+    /* Open the vorbis file */
+    if( ov_open(file, &ogg_file, NULL, 0) != 0 ) {
+        fclose( file );
+        return;
+    }
+
+    comment = ov_comment( &ogg_file, -1 );
+
+    if( comment == NULL ) {
+        ov_clear( &ogg_file );
+        return;
+    }
+
+    for(i = 0; i < comment->comments; i++ ) {
+        start = comment->user_comments[i];
+        end = strchr( start, '=' );
+        if( end == NULL ) {
+            continue;
+        }
+        key = copy_string( start, end - 1 );
+        value = strdup( end+1 );
+        insert_meta_data( data, NULL, key, value );
+    }
+
+    ov_clear( &ogg_file );
 }
 
 /*
@@ -127,7 +172,7 @@ void ogg_close( void *data ) {
     /* closing the vorbis file also closed the FILE*! */
 
     /* Free allocated storage */
-    free( ogg_data );
+    squash_free( ogg_data );
 
     return;
 }

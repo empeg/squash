@@ -85,6 +85,13 @@ void *mp3_open( char *filename, sound_format_t *sound_format ) {
 }
 
 /*
+ * Set a song's metadata based on id3v2 tag,
+ */
+void mp3_load_meta( void *data, char *filename ) {
+    /* TODO: do this */
+}
+
+/*
  * Decode a frame of mp3 data.
  */
 frame_data_t mp3_decode_frame( void *data ) {

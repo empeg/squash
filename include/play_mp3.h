@@ -43,6 +43,7 @@ typedef struct mp3_data_s {
  * Prototypes
  */
 void *mp3_open( char *filename, sound_format_t *sound_format );
+void mp3_load_meta( void *data, char *filename );
 frame_data_t mp3_decode_frame( void *data );
 long mp3_calc_duration( void *data );
 void mp3_seek( void *data, long seek_time );

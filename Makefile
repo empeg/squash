@@ -47,7 +47,10 @@ all: squash
 squash: squash.o play_mp3.o play_ogg.o sound.o player.o playlist_manager.o database.o display.o spectrum.o global.o stat.o input.o
 	$(CC) $(LDFLAGS) -o squash obj/player.o obj/playlist_manager.o obj/display.o obj/database.o obj/input.o obj/sound.o obj/play_ogg.o obj/play_mp3.o obj/squash.o obj/spectrum.o obj/global.o obj/stat.o
 
-play_ogg.o play_mp3.o sound.o: %.o : %.c %.h global.h
+sound.o: %.o : %.c %.h global.h
+	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
+
+play_ogg.o play_mp3.o: %.o : %.c %.h global.h database.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
 playlist_manager.o: %.o : %.c %.h global.h database.h stat.h
@@ -62,7 +65,7 @@ player.o: %.o : %.c %.h global.h sound.h play_mp3.h play_ogg.h spectrum.h stat.h
 display.o: %.o : %.c %.h global.h spectrum.h database.h stat.h version.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
-database.o: %.o : %.c %.h global.h stat.h player.h display.h
+database.o: %.o : %.c %.h global.h stat.h player.h display.h play_ogg.h play_mp3.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
 stat.o: %.o : %.c %.h global.h database.h

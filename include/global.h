@@ -52,9 +52,9 @@
 #define WIN_COUNT 5
 
 #ifdef DEBUG
-    #define CONFIG_KEY_COUNT 8
+    #define CONFIG_KEY_COUNT 10
 #else
-    #define CONFIG_KEY_COUNT 7
+    #define CONFIG_KEY_COUNT 9
 #endif
 
 /*
@@ -115,6 +115,8 @@ typedef struct config_keys_s {
 typedef struct config_s {
     char *db_paths[3];
     int db_readonly;
+    int db_saveinfo;
+    int db_overwriteinfo;
 
     char *input_fifo_path;
 
@@ -377,7 +379,7 @@ log_info_t log_info;
 enum song_type_e get_song_type( const char *file_name );
 void _squash_error( const char *filename, int line_num, const char *format, ... );
 void _squash_log( const char *filename, int line_num, const char *format, ... );
-void parse_file( const char *file_name, void(*add_data)(void*, char*, char*, char*), void *data );
+bool parse_file( const char *file_name, void(*add_data)(void*, char*, char*, char*), void *data );
 void set_config( void *data, char *header, char *key, char *value );
 void init_config( void );
 char *copy_string( const char *start, const char *end );

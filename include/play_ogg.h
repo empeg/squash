@@ -47,6 +47,7 @@ typedef struct ogg_data_s {
  * Prototypes
  */
 void *ogg_open( char *filename, sound_format_t *sound_format );
+void ogg_load_meta( void *data, char *filename );
 frame_data_t ogg_decode_frame( void *data );
 long ogg_calc_duration( void *data );
 void ogg_seek( void *data, long seek_time );

@@ -40,6 +40,8 @@ config_keys_t config_keys[ CONFIG_KEY_COUNT ] = {
     { "Database", "Stat_Path", (void *)&config.db_paths[ BASENAME_STAT ], TYPE_STRING },
     { "Database", "Song_Path", (void *)&config.db_paths[ BASENAME_SONG ], TYPE_STRING },
     { "Database", "Readonly", (void *)&config.db_readonly, TYPE_INT },
+    { "Database", "Save_Info", (void *)&config.db_saveinfo, TYPE_INT },
+    { "Database", "Overwrite_Info", (void *)&config.db_overwriteinfo, TYPE_INT },
     { "Global", "Control_Filename", (void *)&config.input_fifo_path, TYPE_STRING },
 #ifdef DEBUG
     { "Global", "Log_Filename", (void *)&config.squash_log_path, TYPE_STRING },
@@ -181,7 +183,7 @@ readonly=0
  * You must make a copy of header if you want to have a copy, you must free
  * key and value if you do not want a copy.
  */
-void parse_file( const char *file_name, void(*add_data)(void*, char*, char*, char*), void *data ) {
+bool parse_file( const char *file_name, void(*add_data)(void*, char*, char*, char*), void *data ) {
     /* Position Variables */
     char *cur_pos = NULL;
     char *cur_start = NULL;
@@ -206,22 +208,26 @@ void parse_file( const char *file_name, void(*add_data)(void*, char*, char*, cha
     FILE *file_desc;
     struct stat file_info;
     char *file_data = NULL;
+    bool exit = TRUE;
 
     /* Open the file */
     if( (file_desc = fopen(file_name, "r")) == NULL ) {
         /* Error opening the file */
+        exit = FALSE;
         goto cleanup;
     }
 
     /* Get information on the file */
     if( fstat(fileno(file_desc), &file_info) ) {
         /* Error loading file information */
+        exit = FALSE;
         goto cleanup;
     }
 
     /* Map the file into memory */
     if( (file_data = (char *)mmap( (void *)NULL, file_info.st_size, PROT_READ, MAP_SHARED, fileno(file_desc), 0)) == MAP_FAILED ) {
         /* Error mapping the file */
+        exit = FALSE;
         goto cleanup;
     }
 
@@ -387,6 +393,8 @@ cleanup:
         fclose( file_desc );
         file_desc = NULL;
     }
+
+    return exit;
 }
 
 /* Used by parse_file() to set config values read */
@@ -447,6 +455,8 @@ void init_config( void ) {
     config.db_paths[ BASENAME_META ] = NULL;
     config.db_paths[ BASENAME_STAT ] = NULL;
     config.db_readonly = 0;
+    config.db_saveinfo = 1;
+    config.db_overwriteinfo = 0;
 
     /* Control Options */
     config.input_fifo_path = strdup("~/.squash_control");
