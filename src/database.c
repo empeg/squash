@@ -171,11 +171,13 @@ song_info_t *find_song_by_filename( char *filename ) {
     for( i = 0; i < database_info.song_count; i++ ) {
         song = &database_info.songs[i];
 
-        /* If the bases match */
+        /* figure out where would the basename ends (if the basenames match) */
         basename_length = strlen( song->basename[ BASENAME_SONG ] );
-        if( strncmp( song->basename[ BASENAME_SONG ], filename, basename_length ) == 0) {
-            /* If the filenames match */
-            if( strcmp( song->filename, &filename[basename_length+1] ) == 0 ) {
+        /* Check if the filenames match first (since this is more likely to be different */
+        if( strcmp( song->filename, &filename[basename_length+1] ) == 0 ) {
+            /* Check if there is a '/' and that the bases match */
+            if( '/' == filename[basename_length] &&
+                strncmp( song->basename[ BASENAME_SONG ], filename, basename_length ) == 0) {
                 return song;
             }
         }
