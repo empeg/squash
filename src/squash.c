@@ -130,13 +130,13 @@ void *setup_database( void *data ) {
     squash_wunlock( database_info.lock );
     squash_unlock( display_info.lock );
 
-    squash_log("starting spectrum");
+    squash_log("starting spectrum in setup db");
     /* Tell the specturm analyzer it can run */
     squash_lock( spectrum_ring.lock );
     spectrum_ring.active = TRUE;
     squash_unlock( spectrum_ring.lock );
 
-    squash_log("starting player");
+    squash_log("starting player in setup db");
     /* Tell the player to start playing */
     squash_lock( player_command.lock );
     player_queue_command( CMD_PLAY );

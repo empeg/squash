@@ -454,7 +454,7 @@ void draw_song_empeg( song_info_t *song, bool current_song ) {
     };
     int rating, i;
 
-    if( current_song ) {
+    if( current_song && song ) {
         rating = song->stat.manual_rating;
 
         if( rating == -1 ) {
@@ -500,33 +500,33 @@ void draw_song_empeg( song_info_t *song, bool current_song ) {
     draw_meta_string_empeg( display_info.screen, song, album_set, 18, 0, WIDTH );
     draw_string_empeg( display_info.screen, "Track: ", 26, 4*11+3, WIDTH-4*11-3 );
     draw_meta_string_empeg( display_info.screen, song, tracknumber_set, 26, 4*11+3+6*4, WIDTH-4*11-3-6*4 );
-    if( current_song ) {
-        char buf[12];
-        int pos_min, pos_sec, dur_min, dur_sec;
-        pos_min = (player_info.current_position/1000) / 60;
-        if( pos_min > 99 ) {
-            pos_min = 99;
-        }
-        pos_sec = (player_info.current_position/1000) % 60;
-        if( player_info.song ) {
-            if( player_info.song->play_length == -1 ) {
-                snprintf(buf, 12, "%02d:%02d", pos_min, pos_sec);
-            } else {
-                dur_min = (player_info.song->play_length/1000) / 60;
-                if( dur_min > 99 ) {
-                    dur_min = 99;
-                }
-                dur_sec = (player_info.song->play_length/1000) % 60;
-                snprintf(buf, 12, "%02d:%02d-%02d:%02d", pos_min, pos_sec, dur_min, dur_sec );
+    if( song ) {
+        if( current_song ) {
+            char buf[12];
+            int pos_min, pos_sec, dur_min, dur_sec;
+            pos_min = (player_info.current_position/1000) / 60;
+            if( pos_min > 99 ) {
+                pos_min = 99;
             }
-            draw_string_monospaced_empeg( display_info.screen, buf, 26, 0, 4 );
-        }
-        if( player_info.song && player_info.song->play_length != 0 ) {
-            int pos = WIDTH*player_info.current_position/player_info.song->play_length;
-            vfdlib_drawPointClipped( display_info.screen, pos, 24, 3);
-        }
-    } else {
-        if( song ) {
+            pos_sec = (player_info.current_position/1000) % 60;
+            if( player_info.song ) {
+                if( player_info.song->play_length == -1 ) {
+                    snprintf(buf, 12, "%02d:%02d", pos_min, pos_sec);
+                } else {
+                    dur_min = (player_info.song->play_length/1000) / 60;
+                    if( dur_min > 99 ) {
+                        dur_min = 99;
+                    }
+                    dur_sec = (player_info.song->play_length/1000) % 60;
+                    snprintf(buf, 12, "%02d:%02d-%02d:%02d", pos_min, pos_sec, dur_min, dur_sec );
+                }
+                draw_string_monospaced_empeg( display_info.screen, buf, 26, 0, 4 );
+            }
+            if( player_info.song && player_info.song->play_length != 0 ) {
+                int pos = WIDTH*player_info.current_position/player_info.song->play_length;
+                vfdlib_drawPointClipped( display_info.screen, pos, 24, 3);
+            }
+        } else {
             char buf[12];
             int dur_min, dur_sec;
             dur_min = (song->play_length/1000) / 60;
