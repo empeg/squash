@@ -17,7 +17,7 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 /*
- * play_ogg.h
+ * play_flac.h
  */
 
 #include "global.h"
@@ -92,14 +92,6 @@ void *flac_open( char *filename, sound_format_t *sound_format ) {
 
     /* Return data */
     return (void *)flac_data;
-}
-
-/*
- * Takes the 24 bit sample given by libflac
- * and return a 16 bit sample.
- */
-int flac_to_16bit(FLAC__int32 f) {
-    return (int)f;
 }
 
 FLAC__StreamDecoderWriteStatus flac_write_callback_load_meta( const FLAC__FileDecoder *decoder, const FLAC__Frame *frame, const FLAC__int32 * const buffer[], void *client_data ) {

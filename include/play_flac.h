@@ -45,7 +45,7 @@ typedef struct flac_data_s {
  * Prototypes
  */
 void *flac_open( char *filename, sound_format_t *sound_format );
-int flac_to_16bit(FLAC__int32 f);
+void flac_error_callback( const FLAC__FileDecoder *decoder, FLAC__StreamDecoderErrorStatus status, void *client_data );
 FLAC__StreamDecoderWriteStatus flac_write_callback_load_meta( const FLAC__FileDecoder *decoder, const FLAC__Frame *frame, const FLAC__int32 * const buffer[], void *client_data );
 void flac_metadata_callback_load_meta( const FLAC__FileDecoder *decoder, const FLAC__StreamMetadata *metadata, void *client_data );
 FLAC__StreamDecoderWriteStatus flac_write_callback_decode_frame( const FLAC__FileDecoder *decoder, const FLAC__Frame *frame, const FLAC__int32 * const buffer[], void *client_data );
