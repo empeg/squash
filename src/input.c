@@ -544,7 +544,6 @@ void do_edit_command( void ) {
     squash_wlock( database_info.lock );
     clear_song_meta(song);
     load_meta_data(song);
-    build_indices();
     squash_wunlock( database_info.lock );
 
     display_init();

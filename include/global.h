@@ -60,7 +60,6 @@
 /*
  * Enumerations
  */
-enum index_type_e { INDEX_ARTIST, INDEX_ALBUM, INDEX_TITLE };
 enum basename_type_e { BASENAME_SONG, BASENAME_META, BASENAME_STAT };
 enum song_type_e { TYPE_UNKNOWN, TYPE_OGG, TYPE_MP3 };
 enum system_state_e { SYSTEM_LOADING, SYSTEM_RUNNING };
@@ -155,11 +154,6 @@ typedef struct db_search_result_s {
     int song_count;
 } db_search_result_t;
 
-typedef struct index_entry_s {
-    song_info_t *song_info;
-    char *value;
-} index_entry_t;
-
 typedef struct db_extension_info_s {
     char *extension;
     int which_basename;
@@ -179,8 +173,6 @@ typedef struct database_info_s {
     long play_sqr_sum;
     long skip_sum;
     long skip_sqr_sum;
-    index_entry_t *indices[ 3 ];
-    int index_counts[ 3 ];
 } database_info_t;
 
 /* Sound device structures */

@@ -10,11 +10,12 @@ order.
 Now you need to bulid the database.  The currently provided tools do not support
 putting these files in a separate directory tree (even though squash supports
 having those files in a separate directory tree).  My suggestion is to fix the
-tools (since they aren't very well writ anyway) or to use tar to move the files
-after they are created.
+tools or to use tar to move the files after they are created.
 
-To create the database just run both ogg_to_info.rb and mp3_to_info.rb with the
-directory name that contains your music.
+To create the database just run import_music.rb with the directory name that
+contains your music.  Note you need to run import_music.rb from the same path
+as the file musicdb_lib.rb .  Or you can move musicdb_lib.rb into a directory
+in your RUBYPATH.
 
 Now you can run squash.  Please enjoy.
 

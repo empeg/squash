@@ -38,15 +38,13 @@ extern const int db_extensions_size;
 void *setup_database( void *data );
 
 void load_db( void );
-void build_indices( void );
 void clear_song_meta( song_info_t *song );
 void clear_db( void );
 
 meta_key_t *get_meta_data( song_info_t *song_info, char *meta_key );
 song_info_t *find_song_by_filename( char *filename );
-db_search_result_t find_matches( enum index_type_e index_type, char *keyword );
+db_search_result_t find_matches( char *key, char *keyword );
 
-void _build_index( enum index_type_e index_type );
 void load_meta_data( song_info_t *song );
 void save_song( song_info_t *song );
 

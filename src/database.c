@@ -116,16 +116,6 @@ void load_db( void ) {
     /* Trim database_info.songs[]'s allocated size */
     database_info.song_count_allocated = database_info.song_count;
     squash_realloc( database_info.songs, database_info.song_count_allocated * sizeof(song_info_t) );
-
-    /* Build the indices */
-    build_indices();
-}
-
-/* Build (or rebuild) the indices */
-void build_indices( void ) {
-    _build_index( INDEX_ARTIST );
-    _build_index( INDEX_ALBUM );
-    _build_index( INDEX_TITLE );
 }
 
 /*
@@ -189,32 +179,41 @@ song_info_t *find_song_by_filename( char *filename ) {
 
 /*
  * Find any songs whose values match keyword.  Looks only at a particular
- * key (determined by which index used).
+ * key.
  */
-db_search_result_t find_matches( enum index_type_e index_type, char *keyword ) {
-    index_entry_t *index;
-    int index_size;
+db_search_result_t find_matches( char *key, char *keyword ) {
     int found_counter;
-    int i;
+    int i, j, k;
     char *match;
     db_search_result_t search_result;
-
-    index = database_info.indices[ index_type ];
-    index_size = database_info.index_counts[ index_type ];
+    song_info_t *song;
+    meta_key_t *meta;
 
     found_counter = 0;
     search_result.song_count = 0;
     search_result.songs = NULL;
 
-    /* Search the appropriate index for a match with keyword */
-    for( i = 0; i < index_size; i++ ) {
-        /* Check for a match */
-        match = strstr( index[i].value, keyword );
+    /* for each entry in the database */
+    for( i = 0; i < database_info.song_count; i++ ) {
+        song = &database_info.songs[i];
+        /* for each meta key in a song */
+        for( j = 0; j < song->meta_key_count; j++ ) {
+            meta = &database_info.songs[i].meta_keys[j];
+            /* if the key matches */
+            if( strcmp( key, meta->key ) == 0 ) {
+                /* for each value */
+                for( k = 0; k < meta->value_count; k++ ) {
+                    match = strstr( keyword, meta->values[k] );
+                    /* If a match was found add it to our result set */
+                    if( match != NULL ) {
+                        squash_ensure_alloc( found_counter, search_result.song_count, search_result.songs, sizeof(song_info_t *), 10, *=2 );
+                        search_result.songs[ found_counter++ ] = song;
+                    }
+                }
 
-        /* If a match was found add it to our result set */
-        if( match != NULL ) {
-            squash_ensure_alloc( found_counter, search_result.song_count, search_result.songs, sizeof(song_info_t *), 10, *=2 );
-            search_result.songs[ found_counter++ ] = index[i].song_info;
+                /* there shouldn't be any other keys that match */
+                break;
+            }
         }
     }
 
@@ -223,69 +222,6 @@ db_search_result_t find_matches( enum index_type_e index_type, char *keyword ) {
     squash_realloc( search_result.songs, search_result.song_count * sizeof(song_info_t *) );
 
     return search_result;
-}
-
-/*
- * Used to qsort the indices
- */
-int compare_string( const void *a, const void *b ) {
-    return strcmp( ((index_entry_t *)a)->value, ((index_entry_t *)b)->value );
-}
-
-/*
- * Build a index of song entries around a particular key
- * Which key is determined by the index_type
- */
-void _build_index( enum index_type_e index_type ) {
-    char *target_key = NULL;
-    int i, j, k;
-    int index_size;
-
-    /* Determine the key based on index_type */
-    switch( index_type ) {
-        case INDEX_ARTIST:
-            target_key = "artist";
-            break;
-        case INDEX_ALBUM:
-            target_key = "album";
-            break;
-        case INDEX_TITLE:
-            target_key = "title";
-            break;
-        default:
-            squash_error( "I don't know that index type" );
-            break;
-    }
-
-    /* Setup the index */
-    squash_free( database_info.indices[index_type] );
-    database_info.index_counts[index_type] = 0;
-    index_size = 0;
-
-    /* For each song, and each song's metakeys if theres a match add all
-       the values to the index */
-    for( i = 0; i < database_info.song_count; i++ ) {
-        for( j = 0; j < database_info.songs[i].meta_key_count; j++ ) {
-            /* If theres a match add all the valuses to the index */
-            if( strcasecmp(target_key, database_info.songs[i].meta_keys[j].key) == 0 ) {
-                for( k = 0; k < database_info.songs[i].meta_keys[j].value_count; k++ ) {
-                    squash_ensure_alloc( index_size, database_info.index_counts[index_type],
-                            database_info.indices[index_type], sizeof(index_entry_t), database_info.song_count*2, *=2 );
-
-                    database_info.indices[ index_type ][ index_size ].song_info = &database_info.songs[ i ];
-                    database_info.indices[ index_type ][ index_size ].value = database_info.songs[ i ].meta_keys[ j ].values[ k ];
-                    index_size++;
-                }
-            }
-        }
-    }
-
-    /* Trim the allocated size of the index */
-    database_info.index_counts[ index_type ] = index_size;
-    squash_realloc( database_info.indices[index_type], database_info.index_counts[index_type] * sizeof(index_entry_t) );
-
-    /* Sort the index, totally unnecessary */
-    qsort( database_info.indices[index_type], database_info.index_counts[index_type], sizeof(index_entry_t), compare_string );
 }
 
 /*
@@ -331,15 +267,6 @@ void clear_db() {
 
     /* Free the array of songs */
     squash_free( database_info.songs );
-
-    /* Free each index */
-    for( i = 0; i < 3; i++) {
-        /* Free the index array */
-        squash_free( database_info.indices[i] );
-        
-        /* Reset the index size */
-        database_info.index_counts[i] = 0;
-    }
 
     /* Reset the sizes */
     database_info.song_count = 0;

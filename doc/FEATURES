@@ -39,6 +39,7 @@ User Interface:
     SEEK
     Searching and insertion
     Viewing past items
+    Better handling of smaller screens
 Database:
 Player:
     Insert old entries back into the queue
