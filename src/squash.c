@@ -46,6 +46,7 @@ int main( int argc, char *argv[] ) {
 #endif
     pthread_t fifo_input_thread;
     pthread_t player_thread;
+    pthread_t frame_decoder_thread;
     pthread_t playlist_manager_thread;
 #ifndef EMPEG
     pthread_t spectrum_thread;
@@ -106,6 +107,7 @@ int main( int argc, char *argv[] ) {
 
     /* Initilize the display */
     display_init();
+    display_init();
     display_info.state = SYSTEM_LOADING;
     /* Set focus, unless there is no focus. */
 #ifndef NO_NCURSES
@@ -158,6 +160,13 @@ int main( int argc, char *argv[] ) {
     player_info.state = STATE_BIG_STOP;
     player_info.song = NULL;
     player_info.current_position = 0;
+    squash_malloc( frame_buffer.frames, PLAYER_MAX_BUFFER_SIZE * sizeof( frame_data_t ) );
+    frame_buffer.song_eof = TRUE;
+    frame_buffer.size = 0;
+    frame_buffer.pcm_size = 0;
+    frame_buffer.decoder_function = NULL;
+    frame_buffer.decoder_data = NULL;
+
 
     /* Draw the screen */
     draw_screen();
@@ -178,6 +187,9 @@ int main( int argc, char *argv[] ) {
 #endif
 
     /* Start playing */
+    squash_log("starting frame decoder");
+    pthread_create( &frame_decoder_thread, NULL, frame_decoder, (void *)NULL );
+
     squash_log("starting player");
     pthread_create( &player_thread, NULL, player, (void *)NULL );
 
@@ -215,6 +227,7 @@ int main( int argc, char *argv[] ) {
 #endif
     pthread_cancel( playlist_manager_thread );
     pthread_cancel( player_thread );
+    pthread_cancel( frame_decoder_thread );
 
     /* Bring ncurses down, unless there is no ncurses */
 #ifndef NO_NCURSES

@@ -22,6 +22,8 @@ player_info.lock
 
 player_command.lock
 
+frame_buffer.lock
+
 spectrum_info.lock
 
 spectrum_ring.lock

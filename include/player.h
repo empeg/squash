@@ -22,6 +22,9 @@
 #ifndef SQUASH_PLAYER_H
 #define SQUASH_PLAYER_H
 
+#define PLAYER_MAX_BUFFER_SIZE 100
+#define PLAYER_MAX_BUFFER_PCM_SIZE (128*1024)
+
 /*
  * Global Data
  */
@@ -30,6 +33,7 @@ extern song_functions_t song_functions[];
 /*
  * Prototypes
  */
+void *frame_decoder( void *input_data );
 void *player( void *input_data );
 song_info_t *get_next_song_info( void );
 void done_with_song_info( song_info_t *song );

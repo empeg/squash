@@ -233,7 +233,7 @@ frame_data_t flac_decode_frame( void *data ) {
             break;
         case FLAC__FILE_DECODER_END_OF_FILE:
             frame_data.pcm_data = NULL;
-            frame_data.pcm_size = -2;
+            frame_data.pcm_size = 0;
             break;
         case FLAC__FILE_DECODER_ERROR_OPENING_FILE:
         case FLAC__FILE_DECODER_MEMORY_ALLOCATION_ERROR:

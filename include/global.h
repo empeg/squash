@@ -291,6 +291,19 @@ typedef struct player_info_s {
     sound_device_t *device;
 } player_info_t;
 
+typedef struct frame_buffer_s {
+    pthread_mutex_t lock;
+    pthread_cond_t restart;
+    pthread_cond_t new_data;
+    frame_data_t *frames;
+    int size;
+    int pcm_size;
+    bool song_eof;
+    void *decoder_data;
+    frame_data_t(* decoder_function)( void * );
+    void(*close_function)( void * );
+} frame_buffer_t;
+
 typedef struct status_info_s {
     pthread_mutex_t lock;
     pthread_cond_t exit;
@@ -375,6 +388,7 @@ song_queue_t song_queue;
 song_queue_t past_queue;
 player_command_t player_command;
 player_info_t player_info;
+frame_buffer_t frame_buffer;
 status_info_t status_info;
 spectrum_ring_t spectrum_ring;
 spectrum_info_t spectrum_info;
