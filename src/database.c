@@ -499,16 +499,21 @@ void _walk_filesystem( char *base_dir, void(*loader)(char *) ) {
     DIR *dir;
     struct dirent *file_entry;
     struct stat file_stat;
-    char *file_path;
-    char *fullfile_path;
-    char *fullbase_dir;
+    char *file_path = NULL;
+    char *fullfile_path = NULL;
+    char *fullbase_dir = NULL;
+    int file_entry_length;
+    int base_dir_length, fullbase_dir_length;
 
     /* Set the fullbase_dir */
     if( base_dir == NULL ) {
         fullbase_dir = strdup( config.db_paths[ BASENAME_SONG ] );
+        base_dir_length = 0;
     } else {
         squash_asprintf(fullbase_dir, "%s/%s", config.db_paths[ BASENAME_SONG ], base_dir );
+        base_dir_length = strlen( base_dir );
     }
+    fullbase_dir_length = strlen( fullbase_dir );
 
     /* Open the directory */
     if( (dir = opendir(fullbase_dir)) == NULL ) {
@@ -518,21 +523,32 @@ void _walk_filesystem( char *base_dir, void(*loader)(char *) ) {
 
     /* For each directory entry, recursively call ourselves if it's a directory
        otherwise call loader() if it's a file */
+    if( base_dir != NULL ) {
+        squash_malloc( file_path, base_dir_length + 257 );
+        strcpy( file_path, base_dir );
+        file_path[ base_dir_length ] = '/';
+        file_path[ base_dir_length+1 ] = '\0';
+    }
+    squash_malloc( fullfile_path, fullbase_dir_length + 257 );
+    strcpy( fullfile_path, fullbase_dir );
+    fullfile_path[ fullbase_dir_length ] = '/';
+    fullfile_path[ fullbase_dir_length+1 ] = '\0';
     while( (file_entry = readdir(dir)) != NULL ) {
         /* Ignore current/parent directory entries */
         if( (strncmp(".", file_entry->d_name, 2) == 0) ||
             (strncmp("..", file_entry->d_name, 3) == 0)) {
             continue;
         }
+        file_entry_length = strlen( file_entry->d_name );
 
         /* Build file_path */
         if( base_dir == NULL ) {
-            file_path = strdup( file_entry->d_name );
+            file_path = file_entry->d_name;
         } else {
-            squash_asprintf( file_path, "%s/%s", base_dir, file_entry->d_name );
+            strcpy( &file_path[ base_dir_length + 1 ], file_entry->d_name );
         }
         /* Bulid fullfile_path */
-        squash_asprintf( fullfile_path, "%s/%s", fullbase_dir, file_entry->d_name );
+        strcpy( &fullfile_path[ fullbase_dir_length + 1 ], file_entry->d_name );
 
         /* If the file can be stat'd, continue walking process */
         if( stat(fullfile_path, &file_stat) == 0 ) {
@@ -545,10 +561,12 @@ void _walk_filesystem( char *base_dir, void(*loader)(char *) ) {
             }
         }
 
-        /* Free built names */
-        squash_free( file_path );
-        squash_free( fullfile_path );
     }
+    /* Free built names */
+    if( base_dir != NULL ) {
+        squash_free( file_path );
+    }
+    squash_free( fullfile_path );
 
     /* Free full_basedir */
     squash_free( fullbase_dir );

@@ -108,6 +108,10 @@ void save_playlist( void ) {
     time_t current_time;
     song_queue_entry_t *cur_song_queue_entry;
 
+    if( config.db_readonly ) {
+        return;
+    }
+
     /* Open the file to write out the playlist */
     if( (playlist_file = fopen(config.playlist_manager_playlist_path, "w")) == NULL ) {
         squash_error( "Can't open file \"%s\" for writing", config.playlist_manager_playlist_path );
