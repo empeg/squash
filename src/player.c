@@ -294,13 +294,13 @@ void *player( void *input_data ) {
 
                         spectrum_update( cur_frame );
 
+                        squash_lock( player_info.lock );
+                        player_info.current_position = cur_frame.position;
                         /* Signal display, if we haven't updated for a whole second */
                         if( cur_frame.position / 1000 != player_info.current_position / 1000 ) {
-                            squash_lock( player_info.lock );
                             squash_broadcast( display_info.changed );
-                            player_info.current_position = cur_frame.position;
-                            squash_unlock( player_info.lock );
                         }
+                        squash_unlock( player_info.lock );
 
                         cur_sound_device = player_info.device;  /* grab a copy of the device
                                                                  * (hope that the sound driver itself is thread safe */

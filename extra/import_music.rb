@@ -47,10 +47,11 @@ You may also specify these options:
                             any changes.
     --only_ogg              Only process ogg files
     --only_mp3              Only process mp3 files
+    --only_flac             Only process flac files
     --verbose, -v           print lots of status information
 EOF
 
-extension_regex = "\\.(mp.?|ogg)$"
+extension_regex = "\\.(mp3|ogg|flac)$"
 
 verbose = false
 noarg = false
@@ -59,6 +60,7 @@ overwrite_existing = false
 strict_additive = false
 only_ogg = false
 only_mp3 = false
+only_flac = false
 dirlist = []
 
 ARGV.each do |arg|
@@ -102,6 +104,10 @@ ARGV.each do |arg|
             only_mp3 = true
             next
         end
+        if arg == "--only_flac"
+            only_flac = true
+            next
+        end
         if arg == "-v" or arg == "--verbose"
             verbose = true
             next
@@ -126,7 +132,8 @@ dirlist.each do |dir|
         next unless filename.downcase =~ extension_regex
         file_type = $1
         next if (file_type != "ogg" and only_ogg) \
-                or (file_type == "ogg" and only_mp3)
+                or (file_type != "mp3" and only_mp3) \
+                or (file_type != "flac" and only_flac)
         puts( "Processing: #{filename}" ) if verbose
         info_filename = filename+".info"
         next if !overwrite_existing and FileTest.exists?( info_filename )
@@ -142,8 +149,10 @@ dirlist.each do |dir|
         end
         if file_type == "ogg"
             info = read_ogg( filename )
-        else
+        elsif file_type == "mp3"
             info = read_mp3( filename )
+        elsif file_type == "flac"
+            info = read_flac( filename )
         end
         if replace_type == "additive"
             info.each do |key, value|

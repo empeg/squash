@@ -54,6 +54,15 @@ def read_mp3( filename )
     return info
 end
 
+def read_flac( filename )
+    info = {}
+    `metaflac --export-vc-to=- #{filename.sq}`.each_line do |line|
+        line =~ /([^=]+)=(.*)/
+        insert_pair( info, $1, $2 ) unless $1.nil?
+    end
+    return info
+end
+
 # This is a list of tables on how to convert id3 tags to
 # database format, and vice versa.
 

@@ -91,7 +91,11 @@ vpath %.o obj
 $(shell umask 002 && mkdir -p obj)
 
 # Rules
+ifndef EMPEG
 all: squash
+else
+all: squash empeg_poweroff
+endif
 
 SQUASH_OBJ_LIST := squash.o play_mp3.o play_ogg.o play_flac.o sound.o player.o playlist_manager.o database.o display.o spectrum.o global.o stat.o input.o
 SQUASH_FILE_LIST := obj/player.o obj/playlist_manager.o obj/display.o obj/database.o obj/input.o obj/sound.o obj/play_flac.o obj/play_ogg.o obj/play_mp3.o obj/squash.o obj/spectrum.o obj/global.o obj/stat.o
@@ -139,7 +143,10 @@ squash.o: %.o : %.c %.h global.h player.h playlist_manager.h database.h display.
 vfdlib.o: empeg/vfdlib.h empeg/vfdlib.c
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/vfdlib.o empeg/vfdlib.c
 
+empeg_poweroff: empeg_poweroff.c
+	$(CC) $(CFLAGS) $(LDFLAGS) -o empeg_poweroff src/empeg_poweroff.c
+
 clean:
-	rm -rf squash* obj core
+	rm -rf squash* obj core empeg_poweroff
 
 .PHONY: all clean

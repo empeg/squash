@@ -46,10 +46,11 @@ You may also specify these options:
                             any changes.
     --only_ogg              Only process ogg files
     --only_mp3              Only process mp3 files
+    --only_flac             Only process flac files
     --verbose, -v           print lots of status information
 EOF
 
-extension_regex = "\\.(mp.?|ogg)$"
+extension_regex = "\\.(mp3|ogg|flac)$"
 
 verbose = false
 noarg = false
@@ -57,6 +58,7 @@ replace_type = "additive"
 force = false
 only_ogg = false
 only_mp3 = false
+only_flac = false
 dirlist = []
 
 ARGV.each do |arg|
@@ -89,6 +91,10 @@ ARGV.each do |arg|
             only_mp3 = true
             next
         end
+        if arg == "--only_flac"
+            only_flac = true
+            next
+        end
         if arg == "-v" or arg == "--verbose"
             verbose = true
             next
@@ -119,7 +125,8 @@ dirlist.each do |dir|
         next unless filename.downcase =~ extension_regex
         file_type = $1
         next if (file_type != "ogg" and only_ogg) \
-                or (file_type == "ogg" and only_mp3)
+                or (file_type != "mp3" and only_mp3) \
+                or (file_type != "flac" and only_flac)
         puts( "Processing: #{filename}" ) if verbose
         info_filename = filename+".info"
         db_info = {}
@@ -132,8 +139,10 @@ dirlist.each do |dir|
         end
         if file_type == "ogg"
             music_info = read_ogg( filename )
-        else
+        elsif file_type == "mp3"
             music_info = read_mp3( filename )
+        elsif file_type == "flac"
+            music_info = read_flac( filename )
         end
         if replace_type == "diff"
             info_file = Tempfile.new( File.basename(info_filename)+"__", File.dirname(info_filename) )
@@ -151,13 +160,13 @@ dirlist.each do |dir|
         unless force
             same = true
             # once id3v2 0.1.9 is fixed we won't have to ignore urls
-            if music_info.reject{ |k,v| file_type != "ogg" and k == "url" }.length \
-                != db_info.reject{ |k,v| file_type != "ogg" and k == "url" }.length
+            if music_info.reject{ |k,v| file_type == "mp3" and k == "url" }.length \
+                != db_info.reject{ |k,v| file_type == "mp3" and k == "url" }.length
                 same = false
             else
                 music_info.each do |key, value|
                     # ignore these tags until id3v2 0.1.9 is fixed
-                    if file_type != "ogg" and (key == "comment" or key == "lyrics")
+                    if file_type == "mp3" and (key == "comment" or key == "lyrics")
                         next
                     end
                     if replace_type == "additive"
@@ -182,7 +191,7 @@ dirlist.each do |dir|
             end
         end
 
-        # Ogg commands are easier to work with if we do the adding
+        # Ogg and Flac commands are easier to work with if we do the adding
         if replace_type == "additive" and file_type == "ogg"
             music_info.each do |key, value|
                 unless db_info.has_key?( key )
@@ -192,13 +201,22 @@ dirlist.each do |dir|
         end
         # db_info now has we need to write
 
-        # We need to clear the mp3 tag, ogg is cleared implicitly
-        if replace_type == "overwrite" and file_type != "ogg"
+        # We need to clear the mp3 tag if we are doing an overwrite,
+        # and we need to always clear out the flac, ogg is cleared implicitly
+        if replace_type == "overwrite" and file_type == "mp3"
             system "id3v2 -D #{filename.sq}"
         end
+        if file_type == "flac"
+            system "metaflac --remove-vc-all #{filename.sq}"
+        end
 
-        if file_type == "ogg"
-            out = IO.popen( "vorbiscomment -R -w -c - #{filename.sq}", "w" )
+        if file_type == "ogg" or file_type == "flac"
+            if file_type == "ogg"
+                command = "vorbiscomment -R -w -c - #{filename.sq}"
+            else
+                command = "metaflac --import-vc-from=- #{filename.sq}"
+            end
+            out = IO.popen( command, "w" )
             db_info.each do |key, value|
                 out.puts "#{key}=#{value}"
             end

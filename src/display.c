@@ -128,14 +128,22 @@ void window_init( void ) {
  * are signaled by other threads.
  */
 void *display_monitor( void *input_data ) {
+#ifdef EMPEG
+    struct timespec sleep_time = { 0, 50000000 };
+#endif
     /* Loop forever waiting for changes to be signaled */
     while( 1 ) {
+        /* Wait for an update */
+#ifdef EMPEG
+        nanosleep( &sleep_time, NULL );
+        /* Acquire display lock */
+        squash_lock( display_info.lock );
+#else
         /* Acquire display lock */
         squash_lock( display_info.lock );
 
-        /* Wait for an update */
         squash_wait( display_info.changed, display_info.lock );
-
+#endif
         /* Grab additional locks */
         squash_rlock( database_info.lock );
         squash_lock( song_queue.lock );

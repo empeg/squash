@@ -30,8 +30,48 @@
 #include "vfdlib.h"             /* for exit status display */
 #include <sys/ioctl.h>          /* for ioctl() */
 #include "sys/soundcard.h"      /* for _SIO*() macros */
+#include <sys/mount.h>          /* for mount() */
 #endif
 #include "squash.h"
+
+#ifdef EMPEG
+void *power(void *data) {
+    int power_fd;
+    int power_flags;
+
+    if ((power_fd = open("/dev/empeg_power", O_RDWR)) == -1) {
+        squash_log("Couldn't open power device\n");
+        return (void *)NULL;
+    }
+
+    ioctl( power_fd, _IOR('p', 2, int), &power_flags );
+
+    if( power_flags & 0x01 ) {
+        while( power_flags & 0x04 ) {
+            sleep(1);
+            ioctl( power_fd, _IOR('p', 2, int), &power_flags );
+        }
+        close( power_fd );
+
+        /* Grab the status lock */
+        squash_lock( status_info.lock );
+
+        /* Setup status information */
+        status_info.status_message = "Power fail";
+        status_info.exit_status = 0;
+
+        /* Release the status lock */
+        squash_unlock( status_info.lock );
+
+        /* Signal the main thread */
+        squash_signal( status_info.exit );
+    } else {
+        close( power_fd );
+    }
+
+    return (void *)NULL;
+}
+#endif
 
 /*
  * Program entry point
@@ -40,6 +80,7 @@ int main( int argc, char *argv[] ) {
     pthread_t display_thread;
 #ifdef EMPEG
     pthread_t ir_input_thread;
+    pthread_t power_thread;
 #endif
 #ifndef NO_NCURSES
     pthread_t keyboard_input_thread;
@@ -52,6 +93,12 @@ int main( int argc, char *argv[] ) {
     pthread_t spectrum_thread;
 #endif
     pthread_t database_thread;
+    pthread_attr_t thread_attr;
+#ifdef EMPEG
+    struct sched_param thread_sched_param;
+    int thread_policy;
+    int low_priority, medium_priority, high_priority;
+#endif
     struct stat fifo_stat;
     int fifo_stat_result;
 
@@ -107,7 +154,6 @@ int main( int argc, char *argv[] ) {
 
     /* Initilize the display */
     display_init();
-    display_init();
     display_info.state = SYSTEM_LOADING;
     /* Set focus, unless there is no focus. */
 #ifndef NO_NCURSES
@@ -130,7 +176,7 @@ int main( int argc, char *argv[] ) {
        ctrl-c since people expect it to be here.
     (void)signal( SIGINT, SIG_IGN );
     */
-    status_info.exit_status = 0;
+    status_info.exit_status = -1;
     status_info.status_message = NULL;
 
     /* Initialize Database */
@@ -167,55 +213,95 @@ int main( int argc, char *argv[] ) {
     frame_buffer.decoder_function = NULL;
     frame_buffer.decoder_data = NULL;
 
-
     /* Draw the screen */
     draw_screen();
 
     squash_log("starting threads...");
+    pthread_attr_init( &thread_attr );
+    /* Find out the scheduling values if we are on the empeg, so that we can use realtime mode */
+#ifdef EMPEG
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_RR );
+    pthread_attr_getschedpolicy( &thread_attr, &thread_policy );
+    squash_log("policy %d, other %d, rr %d, fifo %d", thread_policy, SCHED_OTHER, SCHED_RR, SCHED_FIFO );
+    pthread_getschedparam( 0, NULL, &thread_sched_param );
+    squash_log("Max priority = %d", sched_get_priority_max(thread_policy) );
+    squash_log("Min priority = %d", sched_get_priority_min(thread_policy) );
+    high_priority = sched_get_priority_max(thread_policy);
+    low_priority = sched_get_priority_min(thread_policy);
+    medium_priority = (high_priority+low_priority)/2;
 
     /* Start support threads */
-    squash_log("starting display");
-    pthread_create( &display_thread, NULL, display_monitor, (void *)NULL );
-    squash_log("starting database");
-    pthread_create( &database_thread, NULL, setup_database, (void *)NULL );
-    squash_log("starting playlist");
-    pthread_create( &playlist_manager_thread, NULL, playlist_manager, (void *)NULL );
-/* trying to display this is a waste right now on the empeg */
-#ifndef EMPEG
-    squash_log("starting spectrum");
-    pthread_create( &spectrum_thread, NULL, spectrum_monitor, (void *)NULL );
+    thread_sched_param.sched_priority = high_priority;
+    pthread_attr_setschedparam( &thread_attr, &thread_sched_param );
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_RR );
 #endif
 
+    squash_log("starting display");
+    pthread_create( &display_thread, &thread_attr, display_monitor, (void *)NULL );
+
+#ifdef EMPEG
+    thread_sched_param.sched_priority = low_priority;
+    pthread_attr_setschedparam( &thread_attr, &thread_sched_param );
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_RR );
+#endif
+
+    squash_log("starting database");
+    pthread_create( &database_thread, &thread_attr, setup_database, (void *)NULL );
+    squash_log("starting playlist");
+    pthread_create( &playlist_manager_thread, &thread_attr, playlist_manager, (void *)NULL );
+
+    /* trying to display this is a waste right now on the empeg */
+#ifndef EMPEG
+    squash_log("starting spectrum");
+    pthread_create( &spectrum_thread, &thread_attr, spectrum_monitor, (void *)NULL );
+#endif
+
+#ifdef EMPEG
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_RR );
+    thread_sched_param.sched_priority = medium_priority;
+    pthread_attr_setschedparam( &thread_attr, &thread_sched_param );
+#endif
     /* Start playing */
     squash_log("starting frame decoder");
-    pthread_create( &frame_decoder_thread, NULL, frame_decoder, (void *)NULL );
+    pthread_create( &frame_decoder_thread, &thread_attr, frame_decoder, (void *)NULL );
 
     squash_log("starting player");
-    pthread_create( &player_thread, NULL, player, (void *)NULL );
+    pthread_create( &player_thread, &thread_attr, player, (void *)NULL );
 
+#ifdef EMPEG
+    thread_sched_param.sched_priority = low_priority;
+    pthread_attr_setschedparam( &thread_attr, &thread_sched_param );
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_RR );
+#endif
     /* Listen for input */
 #ifdef EMPEG
     squash_log("starting ir");
-    pthread_create( &ir_input_thread, NULL, ir_monitor, (void *)NULL );
+    pthread_create( &ir_input_thread, &thread_attr, ir_monitor, (void *)NULL );
+
+    squash_log("starting power");
+    pthread_create( &power_thread, &thread_attr, power, (void *)NULL );
 #endif
 #ifndef NO_NCURSES
     squash_log("starting keyboard");
-    pthread_create( &keyboard_input_thread, NULL, keyboard_monitor, (void *)NULL );
+    pthread_create( &keyboard_input_thread, &thread_attr, keyboard_monitor, (void *)NULL );
 #endif
     squash_log("starting fifo");
-    pthread_create( &fifo_input_thread, NULL, fifo_monitor, (void *)NULL );
+    pthread_create( &fifo_input_thread, &thread_attr, fifo_monitor, (void *)NULL );
 
     squash_log("threads started, waiting till done");
 
     /* Grab the status lock */
     squash_lock( status_info.lock );
 
-    /* Wait for someone to signal a end condition */
-    squash_wait( status_info.exit, status_info.lock );
+    while( status_info.exit_status == -1 ) {
+        /* Wait for someone to signal a end condition */
+        squash_wait( status_info.exit, status_info.lock );
+    }
 
     /* Kill all threads */
 #ifdef EMPEG
     pthread_cancel( ir_input_thread );
+    pthread_cancel( power_thread );
 #endif
 #ifndef NO_NCURSES
     pthread_cancel( keyboard_input_thread );
@@ -250,10 +336,15 @@ int main( int argc, char *argv[] ) {
 
 #ifdef EMPEG
     vfdlib_clear( display_info.screen, 0 );
-    vfdlib_drawText( display_info.screen, "Squash Ended", 0, 0, 2, 3);
+    if( status_info.status_message == NULL ) {
+        vfdlib_drawText( display_info.screen, "Squash Ended", 0, 0, 2, 3);
+    } else {
+        vfdlib_drawText( display_info.screen, status_info.status_message, 0, 0, 2, 3 );
+    }
     ioctl(display_info.screen_fd, _IO('d', 0));
     sleep(1);
 
+    /* Turn off the display */
     ioctl(display_info.screen_fd, _IOW('d', 1, int), 0);
 #endif
 

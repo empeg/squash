@@ -39,7 +39,7 @@ You may also specify these options:
     --verbose, -v           print lots of status information
 EOF
 
-extension_regex = "\\.(mp.?|ogg)$"
+extension_regex = "\\.(mp3|ogg|flac)$"
 
 verbose = false
 noindex = false

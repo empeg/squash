@@ -53,7 +53,7 @@ And these commands:
                             regex may not contain a comma!
 EOF
 
-extension_regex = "\\.(mp.?|ogg)$"
+extension_regex = "\\.(mp3|ogg|flac)$"
 
 verbose = false
 noarg = false

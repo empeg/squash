@@ -593,7 +593,6 @@ void load_all_meta_data( enum meta_type_e which ) {
         }
         load_meta_data( &database_info.songs[i], which );
         squash_wunlock( database_info.lock );
-        sched_yield();
     }
 }
 

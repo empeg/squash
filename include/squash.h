@@ -26,6 +26,10 @@
 /*
  * Prototypes
  */
+#ifdef EMPEG
+void *power( void *data );
+#endif
+
 int main( int argc, char *argv[] );
 void _squash_kill( int sig );
 
