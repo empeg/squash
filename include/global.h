@@ -79,7 +79,7 @@
  * Enumerations
  */
 enum basename_type_e { BASENAME_SONG, BASENAME_META, BASENAME_STAT };
-enum song_type_e { TYPE_UNKNOWN, TYPE_OGG, TYPE_MP3 };
+enum song_type_e { TYPE_UNKNOWN, TYPE_OGG, TYPE_MP3, TYPE_FLAC };
 enum system_state_e { SYSTEM_LOADING, SYSTEM_RUNNING };
 enum data_type_e { TYPE_STRING, TYPE_INT, TYPE_DOUBLE };
 enum meta_type_e { TYPE_META, TYPE_STAT }; /* these match with db_extensions array */
@@ -175,6 +175,9 @@ typedef struct song_info_s {
     int meta_key_count;
 
     stat_info_t stat;
+
+    long play_length; /* milliseconds */
+    enum song_type_e song_type;
 } song_info_t;
 
 typedef struct key_set_s {
@@ -244,7 +247,7 @@ typedef struct song_functions_s {
     void *(*open)( char *filename, sound_format_t *format );
     frame_data_t(*decode_frame)( void * );
     long(*calc_duration)( void * );
-    void(*seek)( void *, long );
+    void(*seek)( void *, long, long );
     void(*close)( void * );
 } song_functions_t;
 
@@ -282,10 +285,9 @@ typedef struct player_command_s {
 typedef struct player_info_s {
     pthread_mutex_t lock;
     pthread_cond_t changed;
-    enum player_state_e state;
     song_info_t *song;
-    long duration;
     long current_position;
+    enum player_state_e state;
     sound_device_t *device;
 } player_info_t;
 

@@ -350,16 +350,20 @@ void draw_empeg_display( void ) {
             pos_min = 99;
         }
         pos_sec = (player_info.current_position/1000) % 60;
-        dur_min = (player_info.duration/1000) / 60;
-        if( dur_min > 99 ) {
-            dur_min = 99;
+        if( !player_info.song || player_info.song->play_length == -1 ) {
+            snprintf(buf, 12, "%02d:%02d", pos_min, pos_sec);
+        } else {
+            dur_min = (player_info.song->play_length/1000) / 60;
+            if( dur_min > 99 ) {
+                dur_min = 99;
+            }
+            dur_sec = (player_info.song->play_length/1000) % 60;
+            snprintf(buf, 12, "%02d:%02d-%02d:%02d", pos_min, pos_sec, dur_min, dur_sec );
         }
-        dur_sec = (player_info.duration/1000) % 60;
-        snprintf(buf, 12, "%02d:%02d-%02d:%02d", pos_min, pos_sec, dur_min, dur_sec );
         draw_string_monospaced_empeg( display_info.screen, buf, 26, 0, 4 );
     }
-    if( player_info.duration != 0 ) {
-        int pos = WIDTH*player_info.current_position/player_info.duration;
+    if( player_info.song && player_info.song->play_length != 0 ) {
+        int pos = WIDTH*player_info.current_position/player_info.song->play_length;
         vfdlib_drawPointClipped( display_info.screen, pos ,24, 3);
     }
     ioctl(display_info.screen_fd, _IO('d', 0));
@@ -424,7 +428,11 @@ void draw_now_playing( void ) {
 
     /* Get Song */
     cur_song = player_info.song;
-    cur_duration = player_info.duration / 1000;
+    if( !cur_song || cur_song->play_length == -1 ) {
+        cur_duration = -1;
+    } else {
+        cur_duration = cur_song->play_length / 1000;
+    }
     cur_position = player_info.current_position / 1000;
 
     /* Make sure we have a song to display */
@@ -447,7 +455,13 @@ void draw_now_playing( void ) {
     mvwprintw( win, 4, 2, "Track:  " );
 
     /* Calculate the time position */
-    time_left = win_width - num_chars(cur_position / 60) - num_chars(cur_duration / 60) - 8;
+    {
+        int time_width = num_chars(cur_position / 60) + 3;
+        if( cur_duration != -1 ) {
+            time_width += num_chars(cur_duration / 60) + 4;
+        }
+        time_left = win_width - time_width - 1;
+    }
 
     /* Print song information */
     draw_meta_string( win, cur_song, title_set, 1, 10, win_width - 16 );
@@ -483,7 +497,16 @@ void draw_now_playing( void ) {
         mvwaddch( win, 6, win_width - 1, ACS_LRCORNER );
 
         wattroff( win, text_color );
+    }
 
+    if( cur_duration == -1 ) {
+        /* Print Time Information */
+        mvwprintw(    win, 3, time_left, "%d:%02d",
+            (int)(cur_position / 60),
+            (int)(cur_position % 60),
+            (int)(cur_duration / 60),
+            (int)(cur_duration % 60) );
+    } else {
         /* Print Time Information */
         mvwprintw(    win, 3, time_left, "%d:%02d/%d:%02d",
             (int)(cur_position / 60),

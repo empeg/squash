@@ -27,6 +27,7 @@
 /*
  * Prototypes
  */
+void ensure_song_fully_loaded( song_info_t *song_info );
 void *playlist_manager( void *input_data );
 void save_playlist( void );
 void load_playlist( void );

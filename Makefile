@@ -9,7 +9,7 @@
 CC		:= gcc
 CFLAGS	:= -O3 -std=gnu99 -pedantic -Wall
 INCLUDE	:= -Iinclude
-LDFLAGS	:= -lmad -lpthread -lm
+LDFLAGS	:= -lFLAC -lmad -lpthread -lm
 
 ifdef EMPEG
 	CC := arm-linux-gcc
@@ -93,8 +93,8 @@ $(shell umask 002 && mkdir -p obj)
 # Rules
 all: squash
 
-SQUASH_OBJ_LIST := squash.o play_mp3.o play_ogg.o sound.o player.o playlist_manager.o database.o display.o spectrum.o global.o stat.o input.o
-SQUASH_FILE_LIST := obj/player.o obj/playlist_manager.o obj/display.o obj/database.o obj/input.o obj/sound.o obj/play_ogg.o obj/play_mp3.o obj/squash.o obj/spectrum.o obj/global.o obj/stat.o
+SQUASH_OBJ_LIST := squash.o play_mp3.o play_ogg.o play_flac.o sound.o player.o playlist_manager.o database.o display.o spectrum.o global.o stat.o input.o
+SQUASH_FILE_LIST := obj/player.o obj/playlist_manager.o obj/display.o obj/database.o obj/input.o obj/sound.o obj/play_flac.o obj/play_ogg.o obj/play_mp3.o obj/squash.o obj/spectrum.o obj/global.o obj/stat.o
 ifdef EMPEG
 SQUASH_OBJ_LIST := $(SQUASH_OBJ_LIST) vfdlib.o
 SQUASH_FILE_LIST := $(SQUASH_FILE_LIST) obj/vfdlib.o
@@ -106,7 +106,7 @@ squash: $(SQUASH_OBJ_LIST)
 sound.o: %.o : %.c %.h global.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
-play_ogg.o play_mp3.o: %.o : %.c %.h global.h database.h
+play_flac.o play_ogg.o play_mp3.o: %.o : %.c %.h global.h database.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
 playlist_manager.o: %.o : %.c %.h global.h database.h stat.h
@@ -115,13 +115,13 @@ playlist_manager.o: %.o : %.c %.h global.h database.h stat.h
 spectrum.o: %.o : %.c %.h global.h display.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
-player.o: %.o : %.c %.h global.h sound.h play_mp3.h play_ogg.h spectrum.h stat.h
+player.o: %.o : %.c %.h global.h sound.h play_mp3.h play_ogg.h play_flac.h spectrum.h stat.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
 display.o: %.o : %.c %.h global.h spectrum.h database.h stat.h version.h empeg/vfdlib.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
-database.o: %.o : %.c %.h global.h stat.h player.h display.h play_ogg.h play_mp3.h
+database.o: %.o : %.c %.h global.h stat.h player.h display.h play_ogg.h play_mp3.h play_flac.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
 stat.o: %.o : %.c %.h global.h database.h

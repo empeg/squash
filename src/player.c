@@ -22,6 +22,7 @@
 
 #include "global.h"
 #include "sound.h"      /* for sound_*() */
+#include "play_flac.h"  /* for flac_*() */
 #include "play_mp3.h"   /* for mp3_*() */
 #include "play_ogg.h"   /* for ogg_*() */
 #include "spectrum.h"   /* for spectrum_reset() */
@@ -34,7 +35,8 @@
 song_functions_t song_functions[] = {
     { NULL, NULL, NULL, NULL, NULL },
     { ogg_open, ogg_decode_frame, ogg_calc_duration, ogg_seek, ogg_close },
-    { mp3_open, mp3_decode_frame, mp3_calc_duration, mp3_seek, mp3_close }
+    { mp3_open, mp3_decode_frame, mp3_calc_duration, mp3_seek, mp3_close },
+    { flac_open, flac_decode_frame, flac_calc_duration, flac_seek, flac_close }
 };
 
 /*
@@ -47,7 +49,6 @@ void *player( void *input_data ) {
     void *cur_decoder_data;
     frame_data_t cur_frame_data;
     unsigned int silence_duration;
-    long cur_song_duration;
     sound_format_t sound_format;
     enum { STATE_BEFORE_SONG, STATE_IN_SONG, STATE_AFTER_SONG } play_state;
     player_command_entry_t *command_entry;
@@ -93,7 +94,7 @@ void *player( void *input_data ) {
 
                         if( play_state == STATE_IN_SONG ) {
                             /* Return to the begenning of the song */
-                            song_functions[ cur_song_type ].seek( cur_decoder_data, 0 );
+                            song_functions[ cur_song_type ].seek( cur_decoder_data, 0, 0 );
                             player_info.current_position = 0;
 
                             /* Reset the spectrum display */
@@ -160,7 +161,7 @@ void *player( void *input_data ) {
                 squash_unlock( song_queue.lock );
 
                 /* Setup the song information */
-                cur_song_type = get_song_type( cur_song_info->basename[ BASENAME_SONG ], cur_song_info->filename );
+                cur_song_type = cur_song_info->song_type;
 
                 /* Make sure this is a file we can deal with */
                 if( cur_song_type == TYPE_UNKNOWN ) {
@@ -182,8 +183,7 @@ void *player( void *input_data ) {
                 }
 
                 /* Set Now Playing Information */
-                cur_song_duration = song_functions[ cur_song_type ].calc_duration( cur_decoder_data );
-                set_now_playing_info( cur_song_info, cur_song_duration );
+                set_now_playing_info( cur_song_info );
 
                 /* skip to near the end of the song... debug line: */
                 /* song_functions[cur_song_type].seek(cur_decoder_data, cur_song_duration - 1000*5); */
@@ -383,10 +383,9 @@ int detect_silence( frame_data_t frame_data, unsigned int *silence_duration ) {
 /*
  * Informs display.c about the now_playing window.
  */
-void set_now_playing_info( song_info_t *song, long duration ) {
+void set_now_playing_info( song_info_t *song ) {
     /* Set song */
     player_info.song = song;
-    player_info.duration = duration;
     player_info.current_position = 0;
 
     /* Signal anybody interested in status */
@@ -411,6 +410,9 @@ void player_queue_command( enum player_command_e command ) {
         player_command.tail = new_entry;
     } else {
         player_command.tail->next = new_entry;
+        if( player_command.tail == player_command.head ) {
+            player_command.head = new_entry;
+        }
     }
     player_command.size++;
 }

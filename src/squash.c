@@ -157,7 +157,6 @@ int main( int argc, char *argv[] ) {
     player_command.size = 0;
     player_info.state = STATE_BIG_STOP;
     player_info.song = NULL;
-    player_info.duration = 0;
     player_info.current_position = 0;
 
     /* Draw the screen */
@@ -166,12 +165,12 @@ int main( int argc, char *argv[] ) {
     squash_log("starting threads...");
 
     /* Start support threads */
+    squash_log("starting display");
+    pthread_create( &display_thread, NULL, display_monitor, (void *)NULL );
     squash_log("starting database");
     pthread_create( &database_thread, NULL, setup_database, (void *)NULL );
     squash_log("starting playlist");
     pthread_create( &playlist_manager_thread, NULL, playlist_manager, (void *)NULL );
-    squash_log("starting display");
-    pthread_create( &display_thread, NULL, display_monitor, (void *)NULL );
 /* trying to display this is a waste right now on the empeg */
 #ifndef EMPEG
     squash_log("starting spectrum");

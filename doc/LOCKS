@@ -16,6 +16,8 @@ database_info.lock  As above, note this is a read/write lock
 
 song_queue.lock
 
+past_queue.lock
+
 player_info.lock
 
 player_command.lock

@@ -25,6 +25,7 @@
 #include "display.h"    /* for draw_info() and draw_screen() */
 #include "play_ogg.h"   /* for ogg_load_meta() */
 #include "play_mp3.h"   /* for mp3_load_meta() */
+#include "play_flac.h"  /* for flac_load_meta() */
 #ifdef EMPEG
 #include "vfdlib.h"     /* for vfdlib_*() */
 #include "version.h"    /* for SQUASH_VERSION */
@@ -89,8 +90,14 @@ void *setup_database( void *data ) {
     squash_signal( database_info.stats_finished );
     squash_log("stats loaded");
 
-    load_all_meta_data( TYPE_META ); /* Load info files */
-    squash_log("metadata loaded");
+    /*
+     * Only load all info files if we are not on empeg (makes skips a little frequent at
+     * start-up, and we don't have any reason them all loaded right now).
+     */
+#ifndef EMPEG
+//    load_all_meta_data( TYPE_META ); /* Load info files */
+//    squash_log("metadata loaded");
+#endif
 
     return (void *)NULL;
 }
@@ -314,7 +321,7 @@ db_search_result_t find_matches( char *key, char *keyword ) {
 }
 
 /*
- * Clears everything allocate in a song except for the filename
+ * Clears everything allocated in a song except for the filename
  */
 void clear_song_meta( song_info_t *song ) {
     int j, k;
@@ -467,7 +474,6 @@ void save_meta_data( song_info_t *song, FILE *file ) {
 void load_meta_data( song_info_t *song, enum meta_type_e which ) {
     char *filename, *metaname, *dirname;
     char *end;
-    enum song_type_e song_type;
     bool success;
     FILE *meta_file;
     struct stat file_stat;
@@ -475,6 +481,11 @@ void load_meta_data( song_info_t *song, enum meta_type_e which ) {
     /* Don't let them trick us! */
     if( song == NULL ) {
         return;
+    }
+
+    /* If we haven't been loaded before and this is TYPE_META, set meta_key_count to 0 */
+    if( which == TYPE_META && song->meta_key_count == -1 ) {
+        song->meta_key_count = 0;
     }
 
     metaname = NULL;
@@ -507,27 +518,38 @@ void load_meta_data( song_info_t *song, enum meta_type_e which ) {
     /* If we didn't load from the stat/info file, and we have a info file,
      * try to load it from the original song file */
     if( !success && which == TYPE_META ) {
-        song_type = get_song_type( song->basename[BASENAME_SONG], song->filename );
+        /* perhaps we haven't figured out what type of song it is yet */
+        if( song->song_type == -1 ) {
+            song->song_type = get_song_type( song->basename[BASENAME_SONG], song->filename );
+        }
 
-        if( song_type != TYPE_UNKNOWN ) {
+        if( song->song_type != TYPE_UNKNOWN ) {
             filename = build_fullfilename( song, BASENAME_SONG );
 
-            if( song_type == TYPE_OGG ) {
-                ogg_load_meta( (void *)song, filename );
-            } else {
-                /* This routine does nothing right now */
-                mp3_load_meta( (void *)song, filename );
+            switch( song->song_type ) {
+                case TYPE_OGG:
+                    ogg_load_meta( (void *)song, filename );
+                    break;
+                case TYPE_MP3:
+                    mp3_load_meta( (void *)song, filename );
+                    break;
+                case TYPE_FLAC:
+                    flac_load_meta( (void *)song, filename );
+                    break;
+                case TYPE_UNKNOWN:
+                    /* can't get here */
+                    break;
             }
             squash_free( filename );
 
             if( config.db_saveinfo ) {
 #ifdef NO_VORBIS_COMMENT
-                if( song_type != TYPE_OGG ) {
+                if( song->song_type != TYPE_OGG ) {
 #else
                 if( TRUE ) {
 #endif
 #ifdef NO_ID3LIB
-                if( song_type != TYPE_MP3 ) {
+                if( song->song_type != TYPE_MP3 ) {
 #else
                 if( TRUE ) {
 #endif
@@ -566,17 +588,10 @@ void load_all_meta_data( enum meta_type_e which ) {
     int i;
     for( i = 0; i < database_info.song_count; i++ ) {
         squash_wlock( database_info.lock );
-        /* If the type is meta, we need to be careful */
-        if( which == TYPE_META ) {
-            /* if we haven't loaded before, set the key count to 0,
-             * otherwise, skip loading this song (since it has already
-             * been loaded */
-            if( database_info.songs[i].meta_key_count == -1 ) {
-                database_info.songs[i].meta_key_count = 0;
-            } else {
-                squash_wunlock( database_info.lock );
-                continue;
-            }
+        /* If the type is meta, we need to be careful, and not load this song a second time  */
+        if( which == TYPE_META && database_info.songs[i].meta_key_count != -1 ) {
+            squash_wunlock( database_info.lock );
+            continue;
         }
         load_meta_data( &database_info.songs[i], which );
         squash_wunlock( database_info.lock );
@@ -698,7 +713,12 @@ void _load_file( char *filename, bool trust ) {
         song->basename[ BASENAME_STAT ] = config.db_paths[ BASENAME_STAT ];
         song->meta_keys = NULL;
         song->meta_key_count = -1;
+        song->stat.play_count = 0;
+        song->stat.skip_count = 0;
+        song->stat.repeat_counter = 0;
         song->stat.changed = FALSE;
+        song->play_length = -1;
+        song->song_type = -1;
 
         /* Update the counter */
         database_info.song_count++;

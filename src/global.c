@@ -74,6 +74,8 @@ enum song_type_e get_song_type( const char *base_name, const char *file_name ) {
         type = TYPE_MP3;
     } else if( !strncasecmp(file_name + file_name_length - 4, ".ogg", 4) ) {
         type = TYPE_OGG;
+    } else if( !strncasecmp(file_name + file_name_length - 5, ".flac", 5) ) {
+        type = TYPE_FLAC;
     }
 
 #ifdef USE_MAGIC
@@ -81,7 +83,11 @@ enum song_type_e get_song_type( const char *base_name, const char *file_name ) {
         char buf[4] = {'\0','\0','\0','\0'};
         FILE *file;
         char *full_name;
-        asprintf( &full_name, "%s/%s", base_name, file_name );
+        if( base_name == NULL ) {
+            full_name = strdup( file_name );
+        } else {
+            asprintf( &full_name, "%s/%s", base_name, file_name );
+        }
         if( (file = fopen(full_name, "r")) == NULL ) {
             squash_error( "Can't open %s to determine filetype", file_name );
         }
@@ -92,6 +98,8 @@ enum song_type_e get_song_type( const char *base_name, const char *file_name ) {
             type = TYPE_MP3;
         } else if ( buf[0] == 'O' && buf[1] == 'g' && buf[2] == 'g' && buf[3] == 'S' ) {
             type = TYPE_OGG;
+        } else if ( buf[0] == 'f' && buf[1] == 'L' && buf[2] == 'a' && buf[3] == 'C' ) {
+            type = TYPE_FLAC;
         }
         fclose( file );
         squash_free( full_name );

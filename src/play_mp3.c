@@ -263,9 +263,6 @@ frame_data_t mp3_decode_frame( void *data ) {
     }
     frame_data.pcm_size = pcm_size;
     frame_data.position = mad_timer_count(mp3_data->timer, MAD_UNITS_MILLISECONDS);
-    if( frame_data.position > mp3_data->duration ) {
-        frame_data.position = mp3_data->duration;
-    }
 
     /* Setup PCM buffer */
     if( frame_data.pcm_size <= 0 ) {
@@ -282,9 +279,17 @@ frame_data_t mp3_decode_frame( void *data ) {
  * Seek to the seek_time position (in milliseconds) in
  * the opened song
  */
-void mp3_seek( void *data, long seek_time ) {
+void mp3_seek( void *data, long seek_time, long duration ) {
     mp3_data_t *mp3_data = (mp3_data_t *)data;
-    long new_file_position = (long)((double)mp3_data->file_size * seek_time / mp3_data->duration);
+    long new_file_position;
+    if( duration <= 0 && seek_time != 0 ) {
+        return;
+    }
+    if( seek_time == 0 ) {
+        new_file_position = 0;
+    } else {
+        new_file_position = (long)((double)mp3_data->file_size * seek_time / duration);
+    }
     mad_stream_buffer(&mp3_data->stream, (unsigned char *)&mp3_data->buffer[new_file_position], mp3_data->file_size - new_file_position);
     mad_timer_set( &mp3_data->timer, 0, seek_time, 1000 );
     mad_frame_mute( &mp3_data->frame );
@@ -339,6 +344,7 @@ unsigned int mad_to_16bit(mad_fixed_t f) {
  */
 long mp3_calc_duration(void * data) {
     mp3_data_t *mp3_data = (mp3_data_t *)data;
+    long duration;
     struct mad_header m_header;
 
     while(1) {
@@ -354,7 +360,7 @@ long mp3_calc_duration(void * data) {
         mad_timer_add(&mp3_data->timer, m_header.duration);
     }
 
-    mp3_data->duration = mad_timer_count(mp3_data->timer, MAD_UNITS_MILLISECONDS);
+    duration = mad_timer_count(mp3_data->timer, MAD_UNITS_MILLISECONDS);
 
     mad_header_finish(&m_header);
     mad_stream_finish(&mp3_data->stream);
@@ -363,5 +369,5 @@ long mp3_calc_duration(void * data) {
     mad_timer_reset(&mp3_data->timer);
     mad_stream_buffer(&mp3_data->stream, (unsigned char *)mp3_data->buffer, mp3_data->file_size);
 
-    return mp3_data->duration;
+    return duration;
 }

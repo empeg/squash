@@ -154,7 +154,7 @@ long ogg_calc_duration( void *data ) {
  * Seek to the seek_time position (in milliseconds) in
  * the opened song
  */
-void ogg_seek( void *data, long seek_time ) {
+void ogg_seek( void *data, long seek_time, long duration ) {
     ogg_data_t *ogg_data = (ogg_data_t *)data;
 #ifdef TREMOR
     ov_time_seek( &ogg_data->file, seek_time );

@@ -23,7 +23,55 @@
 #include "global.h"
 #include "database.h"   /* for save_song() */
 #include "stat.h"       /* for pick_song() */
+#include "player.h"     /* for song_functions[] */
 #include "playlist_manager.h"
+
+void ensure_song_fully_loaded( song_info_t *song_info ) {
+    if( song_info == NULL ) {
+        return;
+    }
+
+    if( song_info->song_type == -1 ) {
+        squash_log("loading song type");
+        song_info->song_type = get_song_type( song_info->basename[ BASENAME_SONG ], song_info->filename );
+    }
+
+    if( song_info->meta_key_count == -1 ) {
+        squash_log("loading metadata");
+        /* Load the meta data if it hasn't been loaded */
+        load_meta_data( song_info, TYPE_META );
+    }
+
+    if( song_info->play_length == -1 ) {
+        squash_log("loading play length");
+        /* Load the play length if it hasn't been loaded */
+        sound_format_t sound_format;
+        void *decoder_data;
+        char *full_filename;
+        long play_length;
+
+        /* Make sure this is a file we can deal with */
+        if( song_info->song_type != TYPE_UNKNOWN ) {
+            /* Open the decoder  */
+            squash_asprintf(full_filename, "%s/%s", song_info->basename[ BASENAME_SONG ], song_info->filename );
+
+            decoder_data = song_functions[ song_info->song_type ].open( full_filename, &sound_format );
+            if( decoder_data == NULL ) {
+                squash_error("Problem opening song file %s", full_filename);
+            }
+
+            /* Set Now Playing Information */
+            play_length = song_functions[ song_info->song_type ].calc_duration( decoder_data );
+
+            song_info->play_length = play_length;
+
+            /* Close the decoder */
+            song_functions[ song_info->song_type ].close( decoder_data );
+
+            squash_free( full_filename );
+        }
+    }
+}
 
 /*
  * Function called for the playlist_manager thread
@@ -208,11 +256,8 @@ void load_playlist( void ) {
 void playlist_queue_song( song_info_t *song ) {
     song_queue_entry_t *new_song_queue_entry;
 
-    /* Load the info metadata if the song hasn't been loaded yet */
-    if( song->meta_key_count == -1 ) {
-        song->meta_key_count = 0;
-        load_meta_data( song, TYPE_META );
-    }
+    /* ensure that the song is fully loaded (meta info, song length and song type) */
+    ensure_song_fully_loaded( song );
 
     /* Allocate space for a new queue entry */
     squash_malloc( new_song_queue_entry, sizeof(song_queue_entry_t) );
