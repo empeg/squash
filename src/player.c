@@ -66,69 +66,75 @@ void *player( void *input_data ) {
 
     while( 1 ) {
         /* Process any commands */
-        squash_wlock( database_info.lock );
-        squash_lock( player_info.lock );
         squash_lock( player_command.lock );
-        command_entry = player_command.head;
-        while( command_entry != NULL ) {
-            squash_log( "Reading command %d", command_entry->command );
-            switch( command_entry->command ) {
-                /* TODO: fix this so that skip and stop are not ignored when
-                 * not inside a song
-                 */
-                case CMD_SKIP:
-                    /* Add this and the player will operate more like
-                     * a regular CD player:
-                    player_info.state = STATE_PLAY;
-                    */
-                    if( play_state == STATE_IN_SONG ) {
-                        play_state = STATE_AFTER_SONG;
-                    }
-                    feedback(cur_song_info, -1);
-                    break;
-                case CMD_STOP:
-                    player_info.state = STATE_STOP;
-
-                    if( play_state == STATE_IN_SONG ) {
-                        /* Return to the begenning of the song */
-                        song_functions[ cur_song_type ].seek( cur_decoder_data, 0 );
-                        player_info.current_position = 0;
-
-                        /* Reset the spectrum display */
-                        spectrum_reset( sound_format );
-
-                        /* Tell the display we've changed */
-                        squash_broadcast( display_info.changed );
-                    }
-                    break;
-                case CMD_PAUSE:
-                    player_info.state = STATE_PAUSE;
-                    break;
-                case CMD_PLAY:
-                    player_info.state = STATE_PLAY;
-                    break;
-                default:
-                    /* ignore */
-                    break;
-            }
-            command_entry = command_entry->next;
-            if( player_command.head == player_command.tail ) {
-                player_command.tail = command_entry;
-            }
-            squash_free( player_command.head );
-            player_command.head = command_entry;
-            player_command.size--;
-        }
-        squash_unlock( player_info.lock );
-        squash_wunlock( database_info.lock );
-        /* only pause if we were going to be playing and we shouldn't */
-        if( player_info.state == STATE_BIG_STOP ||
-            ( play_state == STATE_IN_SONG && player_info.state != STATE_PLAY) ) {
-            squash_wait( player_command.changed, player_command.lock );
+        if( player_command.head == NULL ) {
             squash_unlock( player_command.lock );
-            continue;
+        } else {
+            squash_unlock( player_command.lock );
+            squash_wlock( database_info.lock );
+            squash_lock( player_info.lock );
+            squash_lock( player_command.lock );
+            command_entry = player_command.head;
+            while( command_entry != NULL ) {
+                squash_log( "Reading command %d", command_entry->command );
+                switch( command_entry->command ) {
+                    /* TODO: fix this so that skip and stop are not ignored when
+                     * not inside a song
+                     */
+                    case CMD_SKIP:
+                        /* Add this and the player will operate more like
+                         * a regular CD player:
+                        player_info.state = STATE_PLAY;
+                        */
+                        if( play_state == STATE_IN_SONG ) {
+                            play_state = STATE_AFTER_SONG;
+                        }
+                        feedback(cur_song_info, -1);
+                        break;
+                    case CMD_STOP:
+                        player_info.state = STATE_STOP;
+
+                        if( play_state == STATE_IN_SONG ) {
+                            /* Return to the begenning of the song */
+                            song_functions[ cur_song_type ].seek( cur_decoder_data, 0 );
+                            player_info.current_position = 0;
+
+                            /* Reset the spectrum display */
+                            spectrum_reset( sound_format );
+
+                            /* Tell the display we've changed */
+                            squash_broadcast( display_info.changed );
+                        }
+                        break;
+                    case CMD_PAUSE:
+                        player_info.state = STATE_PAUSE;
+                        break;
+                    case CMD_PLAY:
+                        player_info.state = STATE_PLAY;
+                        break;
+                    default:
+                        /* ignore */
+                        break;
+                }
+                command_entry = command_entry->next;
+                    if( player_command.head == player_command.tail ) {
+                        player_command.tail = command_entry;
+                    }
+                    squash_free( player_command.head );
+                    player_command.head = command_entry;
+                player_command.size--;
+            }
+            squash_unlock( player_info.lock );
+            squash_wunlock( database_info.lock );
+            /* only pause if we were going to be playing and we shouldn't */
+            if( player_info.state == STATE_BIG_STOP ||
+                ( play_state == STATE_IN_SONG && player_info.state != STATE_PLAY) ) {
+                squash_wait( player_command.changed, player_command.lock );
+                squash_unlock( player_command.lock );
+                continue;
+            }
+            squash_unlock( player_command.lock );
         }
-        squash_unlock( player_command.lock );
 
         /* Actually play stuff */
         switch( play_state ) {
