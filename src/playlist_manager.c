@@ -210,7 +210,7 @@ void playlist_queue_song( song_info_t *song ) {
     /* Load the info metadata if the song hasn't been loaded yet */
     if( song->meta_key_count == -1 ) {
         song->meta_key_count = 0;
-        load_meta_data( song, 0 );
+        load_meta_data( song, TYPE_META );
     }
 
     /* Allocate space for a new queue entry */

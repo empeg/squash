@@ -64,6 +64,7 @@ enum basename_type_e { BASENAME_SONG, BASENAME_META, BASENAME_STAT };
 enum song_type_e { TYPE_UNKNOWN, TYPE_OGG, TYPE_MP3 };
 enum system_state_e { SYSTEM_LOADING, SYSTEM_RUNNING };
 enum data_type_e { TYPE_STRING, TYPE_INT, TYPE_DOUBLE };
+enum meta_type_e { TYPE_META, TYPE_STAT }; /* these match with db_extensions array */
 
 /*
  * The difference betwenn STOP and BIG_STOP is that BIG_STOP makes the player
@@ -312,6 +313,11 @@ status_info_t status_info;
 spectrum_ring_t spectrum_ring;
 spectrum_info_t spectrum_info;
 database_info_t database_info;
+
+/* File Extensions to check, values defined at top of global.c */
+extern const db_extension_info_t db_extensions[];
+extern const int db_extensions_size;
+
 config_t config;
 /* Holds valid configuration varables, defined at the top of global.c */
 extern config_keys_t config_keys[ CONFIG_KEY_COUNT ];

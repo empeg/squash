@@ -68,7 +68,7 @@ database.o: %.o : %.c %.h global.h stat.h player.h display.h
 stat.o: %.o : %.c %.h global.h database.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
-global.o: %.o : %.c %.h
+global.o: %.o : %.c %.h display.h database.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
 input.o: %.o : %.c %.h global.h display.h player.h database.h stat.h

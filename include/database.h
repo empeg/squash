@@ -28,10 +28,6 @@
 /* Initial database allocation size */
 #define INITIAL_DB_SIZE 2500
 
-/* File Extensions to check, values defined at top of database.c */
-extern const db_extension_info_t db_extensions[];
-extern const int db_extensions_size;
-
 /*
  * Prototypes
  */
@@ -45,8 +41,8 @@ meta_key_t *get_meta_data( song_info_t *song_info, char *meta_key );
 song_info_t *find_song_by_filename( char *filename );
 db_search_result_t find_matches( char *key, char *keyword );
 
-void load_meta_data( song_info_t *song, int which );
-void load_all_meta_data( int which );
+void load_meta_data( song_info_t *song, enum meta_type_e which );
+void load_all_meta_data( enum meta_type_e which );
 void save_song( song_info_t *song );
 
 void insert_meta_data( void *data, char *header, char *key, char *value );

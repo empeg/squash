@@ -22,7 +22,15 @@
  */
 
 #include "global.h"
+#include "database.h"
 #include "display.h"
+
+/* File Extensions to use. */
+const db_extension_info_t db_extensions[] = {
+    {"info", BASENAME_META, insert_meta_data, NULL, NULL },
+    {"stat", BASENAME_STAT, set_stat_data, save_stat_data, is_stat_data_changed}
+};
+const int db_extensions_size = sizeof( db_extensions ) / sizeof( db_extensions[0] );
 
 /*
  * Setup the config file keys

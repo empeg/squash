@@ -25,13 +25,6 @@
 #include "display.h"    /* for draw_info() and draw_screen() */
 #include "database.h"
 
-/* File Extensions to use. */
-const db_extension_info_t db_extensions[] = {
-    {"info", BASENAME_META, insert_meta_data, NULL, NULL },
-    {"stat", BASENAME_STAT, set_stat_data, save_stat_data, is_stat_data_changed}
-};
-const int db_extensions_size = sizeof( db_extensions ) / sizeof( db_extensions[0] );
-
 /*
  * This is called by main() to load the DB.  Since nothing else can happen until
  * the database is loaded, it does a few other things, in order to tell the other
@@ -80,12 +73,12 @@ void *setup_database( void *data ) {
     squash_signal( song_queue.not_full );
     squash_unlock( song_queue.lock );
 
-    load_all_meta_data( 1 ); /* Load statistics */
+    load_all_meta_data( TYPE_STAT ); /* Load statistics */
     /* Load the statistics routine (needed for playlist_manager() to call pick_song()) */
     start_song_picker();
     squash_signal( database_info.stats_finished );
 
-    load_all_meta_data( 0 ); /* Load info files */
+    load_all_meta_data( TYPE_META ); /* Load info files */
 
     return (void *)NULL;
 }
@@ -357,7 +350,7 @@ void save_stat_data( song_info_t *song, FILE *file ) {
 /*
  * Loads the metadata for a song from the disk
  */
-void load_meta_data( song_info_t *song, int which ) {
+void load_meta_data( song_info_t *song, enum meta_type_e which ) {
     char *cur_file;
     int cur_file_length;
 
@@ -385,11 +378,11 @@ void load_meta_data( song_info_t *song, int which ) {
 /*
  * Goes though all songs and loads the meta data for them.
  */
-void load_all_meta_data( int which ) {
+void load_all_meta_data( enum meta_type_e which ) {
     int i;
     for( i = 0; i < database_info.song_count; i++ ) {
         squash_wlock( database_info.lock );
-        if( which == 0 ) {
+        if( which == TYPE_META ) {
             if( database_info.songs[i].meta_key_count == -1 ) {
                 database_info.songs[i].meta_key_count = 0;
             } else {

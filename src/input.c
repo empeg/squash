@@ -542,9 +542,9 @@ void do_edit_command( void ) {
     waitpid(pid, NULL, 0);
 
     squash_wlock( database_info.lock );
-    clear_song_meta(song);
-    load_meta_data(song, 0);
-    load_meta_data(song, 1);
+    clear_song_meta( song );
+    load_meta_data( song, TYPE_META );
+    load_meta_data( song, TYPE_STAT );
     squash_wunlock( database_info.lock );
 
     display_init();
