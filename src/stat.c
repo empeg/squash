@@ -62,6 +62,7 @@ void start_song_picker() {
     database_info.play_sqr_sum = play_sqr_sum;
     database_info.skip_sum = skip_sum;
     database_info.skip_sqr_sum = skip_sqr_sum;
+    database_info.stats_loaded = TRUE;
 }
 
 /*

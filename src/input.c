@@ -543,7 +543,8 @@ void do_edit_command( void ) {
 
     squash_wlock( database_info.lock );
     clear_song_meta(song);
-    load_meta_data(song);
+    load_meta_data(song, 0);
+    load_meta_data(song, 1);
     squash_wunlock( database_info.lock );
 
     display_init();

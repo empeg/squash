@@ -45,14 +45,11 @@ void *setup_database( void *data ) {
     squash_lock( player_info.lock );
 
     /* Load the database */
-    load_db();
+    load_db_filenames();
 
     /* Unlock the locks we don't need anymore */
     squash_unlock( player_info.lock );
     squash_unlock( song_queue.lock );
-
-    /* Load the statistics routine (needed for playlist_manager() to call pick_song()) */
-    start_song_picker();
 
     /* Hide the info window, and unhide the spectrum analyzer */
     display_info.window[ WIN_INFO ].state = WIN_STATE_HIDDEN;
@@ -83,21 +80,32 @@ void *setup_database( void *data ) {
     squash_signal( song_queue.not_full );
     squash_unlock( song_queue.lock );
 
+    load_all_meta_data( 1 ); /* Load statistics */
+    /* Load the statistics routine (needed for playlist_manager() to call pick_song()) */
+    start_song_picker();
+    squash_signal( database_info.stats_finished );
+
+    load_all_meta_data( 0 ); /* Load info files */
+
     return (void *)NULL;
 }
 
 /*
  * Loads the database.  Will walk the config.db_paths[ BASENAME_SONG ] directory
- * looking for known music types.  It will then load the meta and stat values too.
- * (which may be in a different directory tree).
+ * looking for known music types.  Loading the meta data and stat values are done,
+ * at a later time, this only loads filenames.
  */
-void load_db( void ) {
+void load_db_filenames( void ) {
     struct stat path_stat;
 
     /* Initialize database_info */
-    database_info.song_count = 0;
-    database_info.song_count_allocated = 0;
-    database_info.songs = NULL;
+    if( database_info.songs != NULL ) {
+        squash_free( database_info.songs );
+        database_info.song_count = 0;
+        database_info.song_count_allocated = 0;
+        database_info.songs = NULL;
+        database_info.stats_loaded = 0;
+    }
 
     /* Check the path to see if it exists */
     if( stat(config.db_paths[ BASENAME_SONG ], &path_stat) != 0 ) {
@@ -349,32 +357,48 @@ void save_stat_data( song_info_t *song, FILE *file ) {
 /*
  * Loads the metadata for a song from the disk
  */
-void load_meta_data( song_info_t *song ) {
+void load_meta_data( song_info_t *song, int which ) {
     char *cur_file;
     int cur_file_length;
-    int i;
 
     /* Don't let them trick us! */
     if( song == NULL || song->filename == NULL ) {
         return;
     }
 
-    /* Parse each extension */
-    for( i = 0; i < db_extensions_size; i++ ) {
-        /* Determine the length of the filename to open */
-        cur_file_length = strlen(song->basename[db_extensions[i].which_basename]) + strlen(song->filename) + strlen(db_extensions[i].extension) + 3;
+    /* Determine the length of the filename to open */
+    cur_file_length = strlen(song->basename[db_extensions[which].which_basename]) + strlen(song->filename) + strlen(db_extensions[which].extension) + 3;
 
-        /* Allocate memory to build the filename */
-        squash_malloc( cur_file, cur_file_length );
+    /* Allocate memory to build the filename */
+    squash_malloc( cur_file, cur_file_length );
 
-        /* Build the filename */
-        snprintf( cur_file, cur_file_length, "%s/%s.%s", song->basename[db_extensions[i].which_basename], song->filename, db_extensions[i].extension);
+    /* Build the filename */
+    snprintf( cur_file, cur_file_length, "%s/%s.%s", song->basename[db_extensions[which].which_basename], song->filename, db_extensions[which].extension);
 
-        /* Parse the file */
-        parse_file( cur_file, db_extensions[i].add_data, (void *)song );
+    /* Parse the file */
+    parse_file( cur_file, db_extensions[which].add_data, (void *)song );
 
-        /* Free the file name */
-        squash_free( cur_file );
+    /* Free the file name */
+    squash_free( cur_file );
+}
+
+/*
+ * Goes though all songs and loads the meta data for them.
+ */
+void load_all_meta_data( int which ) {
+    int i;
+    for( i = 0; i < database_info.song_count; i++ ) {
+        squash_wlock( database_info.lock );
+        if( which == 0 ) {
+            if( database_info.songs[i].meta_key_count == -1 ) {
+                database_info.songs[i].meta_key_count = 0;
+            } else {
+                squash_wunlock( database_info.lock );
+                continue;
+            }
+        }
+        load_meta_data( &database_info.songs[i], which );
+        squash_wunlock( database_info.lock );
     }
 }
 
@@ -476,11 +500,8 @@ void _load_file( char *filename ) {
         song->basename[ BASENAME_META ] = config.db_paths[ BASENAME_META ];
         song->basename[ BASENAME_STAT ] = config.db_paths[ BASENAME_STAT ];
         song->meta_keys = NULL;
-        song->meta_key_count = 0;
+        song->meta_key_count = -1;
         song->stat.changed = FALSE;
-
-        /* Load the song from disk */
-        load_meta_data( song );
 
         /* Update the counter */
         database_info.song_count++;

@@ -72,9 +72,18 @@ void *playlist_manager( void *input_data ) {
 
         /* We only get here if we have things to add */
 
-        /* Grab the database lock */
+        /* Check to see if there are any songs */
         if( database_info.song_count <= 0 ) {
             squash_error("This shouldn't happen, database is empty!");
+        }
+
+        /* Now wait for the statistics data to be loaded */
+        while( !database_info.stats_loaded ) {
+            squash_wunlock( database_info.lock );
+            squash_wait( database_info.stats_finished, song_queue.lock );
+            squash_unlock( song_queue.lock );
+            squash_wlock( database_info.lock );
+            squash_lock( song_queue.lock );
         }
 
         playlist_queue_song( &database_info.songs[ pick_song() ] );
@@ -162,7 +171,8 @@ void load_playlist( void ) {
 
     cur_data = file_data;
     while( cur_data != NULL ) {
-        /* Acquire lock */
+        /* Acquire locks */
+        squash_wlock( database_info.lock );
         squash_lock( song_queue.lock );
 
         this_line = strsep( &cur_data, "\n" );
@@ -181,8 +191,9 @@ void load_playlist( void ) {
             }
         }
 
-        /* Release the lock */
+        /* Release the locks */
         squash_unlock( song_queue.lock );
+        squash_wunlock( database_info.lock );
     }
 
     /* Close the playlist file */
@@ -195,6 +206,12 @@ void load_playlist( void ) {
  */
 void playlist_queue_song( song_info_t *song ) {
     song_queue_entry_t *new_song_queue_entry;
+
+    /* Load the info metadata if the song hasn't been loaded yet */
+    if( song->meta_key_count == -1 ) {
+        song->meta_key_count = 0;
+        load_meta_data( song, 0 );
+    }
 
     /* Allocate space for a new queue entry */
     squash_malloc( new_song_queue_entry, sizeof(song_queue_entry_t) );

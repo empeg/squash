@@ -167,6 +167,8 @@ typedef struct database_info_s {
     song_info_t *songs;
     int song_count;
     int song_count_allocated;
+    bool stats_loaded;
+    pthread_cond_t stats_finished;
     double sum;
     double sqr_sum;
     long play_sum;

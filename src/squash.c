@@ -95,7 +95,13 @@ int main( int argc, char *argv[] ) {
     status_info.exit_status = 0;
     status_info.status_message = NULL;
 
-    /* Initialiize Song Queue */
+    /* Initialize Database */
+    database_info.song_count = 0;
+    database_info.song_count_allocated = 0;
+    database_info.songs = NULL;
+    database_info.stats_loaded = FALSE;
+
+    /* Initialize Song Queue */
     song_queue.head = NULL;
     song_queue.tail = NULL;
     song_queue.selected = -1;
