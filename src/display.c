@@ -468,8 +468,13 @@ void draw_playlist( void ) {
     } else {
         song_queue_entry_t *cur_song_queue_entry;
 
+        /* If our size is less than it will eventually be */
         if( song_queue.size < song_queue.wanted_size ) {
             mvwprintw( win, 0, 10, "(loading)");
+        /* otherwise, we are as big as we are going to get, so
+           if our selection is too big clip it */
+        } else if ( song_queue.selected >= song_queue.size ) {
+            song_queue.selected = song_queue.size - 1;
         }
 
         /* Update the number of rows to display */
