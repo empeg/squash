@@ -1,0 +1,69 @@
+squash is a music player.
+
+squash is the best music player.  Specifically, squash will ensure
+you do not spend valuable time in order to listen to your music.
+
+The player accomplishes this by automatically picking good music more
+often than bad music.  It also will not play the same song over and
+over again.  Lastly, squash will decide what is a good and bad song
+simply by whether or not you skip the song it has choosen for you.
+
+The result is a perfect background music player.  It's like a radio
+station that will tune itself automatically to your listening
+preferences, but still provide the variety you need to stay
+interested.
+
+Features:
+
+Automatically decides songs to play.
+Picks better songs more frequently than worse songs.
+Decides what is better and worse automatically.
+Avoids picking the same song repeatedly.
+Cool (text) graphical analyzer.
+Standard meta information (Artist, etc.) stored in seperate file.
+Statistics meta information (for picking songs) also stored in
+seperate file.
+FIFO control file, for external control (for example, joysticks).
+
+Future Features:
+Support for empeg devices (a StrongARM based car stereo).
+Allow meta information to be stored in separate filesystem trees.
+Allow selection of what songs the player picks from (rather than the
+entire collection).
+
+Some technical details:
+
+squash currently only runs on Linux platforms.  Other GNU/Unix
+platforms may require minimum porting.  Libraries required are ncurses
+(for the display), pthreads (for threading), fftw (for the spectrum
+analyzer), glibc (for lots of things), libmad (for mp3 playback),
+libvorbisfile (for ogg playback) and libao (for sound support).
+
+Support for tremor (libivorbisfile) the integer only ogg decoder is
+available, but not enabled by default.
+
+Support for removal of ncurses and fftw will be added later.
+
+To compile squash just run 'make'.  There are some configuration
+options, though specifying them is currently clunky:
+
+DEBUG           turn on debuging
+LOCK_DEBUG      turn on lock debugging (also enables DEBUG)
+INPUT_DEBUG     turn on input debugging (also enables DEBUG)
+TREMOR          turn on tremor support
+
+To specify an option run 'DEBUG=1 make' instead of just 'make'.
+
+Please remember to run make clean before using a new set of options.
+
+Installation:
+
+Please see the doc/INSTALL file for details.  squash cannot just be
+run.  You must first run some scripts to extract meta information.
+
+Squash is written by Adam Luter, copyright 2003.  Thanks for John
+Preston for support, advice, computer usage, caffiene and a good
+bit of the ncurses interface.
+
+Contact the author:  luterac@auburn.edu, luterac@bellsouth.net
+

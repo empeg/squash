@@ -1,0 +1,50 @@
+This document is a feature oriented TODO.
+
+DONE:
+User Interface:
+    STOP
+    SKIP
+    PLAY/PAUSE
+    External interface (input only)
+    Editing meta tags
+    Playlist selection, modification
+    Configuration file
+Database:
+    Scan filesystem and load metatags
+    Read loaded metatags
+    Search for keywords in metatags
+    Handles string for values
+    Replace (write) metatags
+    Write (to disk) all metatags that have been changed
+    Handle multiple value types (string, integer, etc)
+    Read metadata from separate trees
+Player:
+    Plays music off playlist
+    Handles commands from other threads
+    Updates other threads of changing info
+    Plays all formats of mp3's and ogg's
+    Modifies "score" on song skips or non-skips, etc.
+Visualizations:
+    Spectrum analyzer
+    On/Off Switch
+    Full screen mode (Tested on text resolution up to 1278 x 498, but theoretically near 32000 x 32000)
+Playlist Manager:
+    Picks songs randomly
+    Ensures minimum number of songs on the queue
+    Uses some smart algorithm to pick songs better
+    Displays statistics about ratings
+
+NOT DONE:
+User Interface:
+    SEEK
+    Searching and insertion
+    Viewing past items
+Database:
+Player:
+    Insert old entries back into the queue
+    Displays details of encoded format
+    Support FLAC
+Visualizations:
+    No FFT when no new data (but still render falloff caps).
+Playlist Manager:
+

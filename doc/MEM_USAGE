@@ -1,0 +1,38 @@
+squash attempts to be resonable in it's memory consumtion.  And
+although it does load all every song into memory, it still manages
+to have low memory usage.
+
+squash has about a 2 megabyte footprint, that's the size with no
+songs loaded.
+
+Approximately 1 to 1.25 kilobytes are used to load each song.  The
+actual malloc'd amount is closer to 350 bytes.  The difference
+between these two numbers is explained by the extra memory slack
+each malloc call provides (e.g. Linux's implementation of malloc
+only allocates powers of two, i.e. 32, 64, 128 bytes, etc.).
+
+The breakdown of current usage:
+
+                    data or     allocation  total   multiplier  grand
+                    pointers    or multiple                     total
+database_info.
+songs[].                        Nx
+filename            4           50          54      N            54*N
+basename[]          12          0           12      N            12*N
+meta_keys[].        4           7x          4       N             4*N
+key                 4           6           10      N*7          70*N
+values[]            4           1x          4       N*7          28*N
+[] (of values)      4           15          19      N*7         133*N
+database_info.
+indices[][].                    3Nx
+song_info           4           0           4       N*3          12*N
+value               4           1x*         4       N*3          12*N
+---------------------------------------------------------------------
+                                                                325*N
+
+* the multiplier for indices' value applies to itself, instead of the
+line below it.
+
+So on average we will expect 325 bytes memory usage per song.  Of
+course, malloc slack adds considerably to this value.
+

@@ -1,0 +1,37 @@
+All program locks are listed below.  Also the order shown is also
+locking order.  That is if you need to hold more than one lock,
+you may only grab them in the order shown.
+
+A lock is necessary to obtain for any access (read or write) of
+the rest of the structure, unless otherwise noted.  Also, access
+to the lock itself does not require a lock beforehand (duh).  And
+condition variables (which are within the structure) do not need
+a lock obtained beforehand.
+
+display_info.lock   As above, and any call to ncurses (such as
+                    getch() or wgetyx() ).
+
+database_info.lock  As above, note this is a read/write lock
+                    instead of a regular mutex.
+
+song_queue.lock
+
+player_info.lock
+
+player_command.lock
+
+spectrum_info.lock
+
+spectrum_ring.lock
+
+log_info.lock       You do not need to use this lock.  It is
+                    only used by the internal _squash_error()
+                    and _squash_log() functions.  Use the
+                    squash_error() and squash_log() macros
+                    instead.
+
+status_info.lock    You do not need to use this lock.  It is
+                    only used by the main() and internal
+                    _squash_error() functions.  Use the
+                    squash_error() macro instead.
+

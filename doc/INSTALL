@@ -1,0 +1,20 @@
+Howto setup squash to be run.
+
+First, have squash copied into your path.  (But I didn't need to tell you that).
+
+Next setup your configuration file.  There is an example configuration file,
+'extra/squash.conf'.  Squash will look in '/etc/squash.conf', '~/squash.conf',
+and SQUASH_CONF (environment variable) for configuration settings and in that
+order.
+
+Now you need to bulid the database.  The currently provided tools do not support
+putting these files in a separate directory tree (even though squash supports
+having those files in a separate directory tree).  My suggestion is to fix the
+tools (since they aren't very well writ anyway) or to use tar to move the files
+after they are created.
+
+To create the database just run both ogg_to_info.rb and mp3_to_info.rb with the
+directory name that contains your music.
+
+Now you can run squash.  Please enjoy.
+
