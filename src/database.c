@@ -417,6 +417,16 @@ void load_meta_data( song_info_t *song, enum meta_type_e which ) {
             squash_free( filename );
 
             if( config.db_saveinfo ) {
+#ifdef NO_VORBIS_COMMENT
+                if( song_type != TYPE_OGG ) {
+#else
+                if( TRUE ) {
+#endif
+#ifdef NO_ID3LIB
+                if( song_type != TYPE_MP3 ) {
+#else
+                if( TRUE ) {
+#endif
                 /* find dir part */
                 end = strrchr( metaname, '/' );
                 if( end != NULL ) {
@@ -436,6 +446,7 @@ void load_meta_data( song_info_t *song, enum meta_type_e which ) {
                     save_meta_data( song, meta_file );
                     fclose(meta_file);
                 }
+/* close two #ifdefs: */ }}
             }
         }
     }

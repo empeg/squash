@@ -12,6 +12,7 @@ User Interface:
 Database:
     Scan filesystem and load metatags
     Extract meta-data directly from OGG files
+    Extract meta-data directly from MP3 files
     Read loaded metatags
     Search for keywords in metatags
     Handles string for values
@@ -41,7 +42,6 @@ User Interface:
     Viewing past items
     Better handling of smaller screens
 Database:
-    Extract meta-data directly from MP3 files
 Player:
     Insert old entries back into the queue
     Displays details of encoded format

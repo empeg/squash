@@ -67,9 +67,7 @@ void *player( void *input_data ) {
     while( 1 ) {
         /* Process any commands */
         squash_lock( player_command.lock );
-        if( player_command.head == NULL ) {
-            squash_unlock( player_command.lock );
-        } else {
+        if( player_command.head != NULL ) {
             squash_unlock( player_command.lock );
             squash_wlock( database_info.lock );
             squash_lock( player_info.lock );
@@ -126,15 +124,16 @@ void *player( void *input_data ) {
             }
             squash_unlock( player_info.lock );
             squash_wunlock( database_info.lock );
-            /* only pause if we were going to be playing and we shouldn't */
-            if( player_info.state == STATE_BIG_STOP ||
-                ( play_state == STATE_IN_SONG && player_info.state != STATE_PLAY) ) {
-                squash_wait( player_command.changed, player_command.lock );
-                squash_unlock( player_command.lock );
-                continue;
-            }
-            squash_unlock( player_command.lock );
         }
+
+        /* only pause if we were going to be playing and we shouldn't */
+        if( player_info.state == STATE_BIG_STOP ||
+            ( play_state == STATE_IN_SONG && player_info.state != STATE_PLAY) ) {
+            squash_wait( player_command.changed, player_command.lock );
+            squash_unlock( player_command.lock );
+            continue;
+        }
+        squash_unlock( player_command.lock );
 
         /* Actually play stuff */
         switch( play_state ) {

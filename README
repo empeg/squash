@@ -30,9 +30,10 @@ Support for empeg devices (a StrongARM based car stereo).
 Allow selection of what songs the player picks from (rather than the
 entire collection).
 
-* For ogg files, reading can be done directly so you do not have to
-store this separate file.  Also the files may be stored in separate
-directories.  mp3 direct tag reading support may be added in the future.
+* Reading can be done directly so you do not have to store this
+separate file.  Also, the files may be stored in separate directories.
+Last, you may create this separate automatically at player start up
+or manualy with a separate script.
 
 Some technical details:
 
@@ -40,20 +41,29 @@ squash currently only runs on Linux platforms.  Other GNU/Unix
 platforms may require minimum porting.  Libraries required are ncurses
 (for the display), pthreads (for threading), fftw (for the spectrum
 analyzer), glibc (for lots of things), libmad (for mp3 playback),
-libvorbisfile (for ogg playback) and libao (for sound support).
+id3lib (for reading id3v2/mp3 tags), libvorbisfile (for ogg playback)
+and libao (for sound support).
 
 Support for tremor (libivorbisfile) the integer only ogg decoder is
 available, but not enabled by default.
 
-Support for removal of ncurses and fftw will be added later.
+Support for removal of fftw and id3lib libraries.  But spectrum and
+id3v2/mp3 tag support, respectively, will also be removed.
+
+Support for removal of ncurses will be added later.
 
 To compile squash just run 'make'.  There are some configuration
 options, though specifying them is currently clunky:
 
-DEBUG           turn on debuging
-LOCK_DEBUG      turn on lock debugging (also enables DEBUG)
-INPUT_DEBUG     turn on input debugging (also enables DEBUG)
-TREMOR          turn on tremor support
+NO_FFTW             turn off spectrum (needs fftw, the fourier
+                    transform library)
+NO_VORBIS_COMMENT   turn off ability to read vorbis comments directly
+                    (note you still need vorbisfile to play ogg files)
+NO_ID3LIB           turn off ability to read id3v2 comments directly
+DEBUG               turn on debuging
+LOCK_DEBUG          turn on lock debugging (also enables DEBUG)
+INPUT_DEBUG         turn on input debugging (also enables DEBUG)
+TREMOR              turn on tremor support
 
 To specify an option run 'DEBUG=1 make' instead of just 'make'.
 
@@ -63,12 +73,12 @@ Installation:
 
 Please see the doc/INSTALL file for details.  squash cannot just be
 run.  You must at least create a configuration file to specify where
-your music is.  Additionally if you have any mp3's you must first run
-some scripts to extract meta information.  (You may want to run these
-scripts even if you have only ogg files).
+your music is.  Additionally, you may want to run some scripts first
+to extract meta information.  However, you do not have to perform this
+step since squash is capable of extracting this information natively.
 
 Squash is written by Adam Luter, copyright 2003.  Thanks for John
-Preston for support, advice, computer usage, caffiene and a good
+Preston for support, advice, computer usage, caffeine and a good
 bit of the ncurses interface.
 
 Contact the author:  luterac@auburn.edu, luterac@bellsouth.net

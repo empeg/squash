@@ -212,6 +212,8 @@ void spectrum_reset( sound_format_t sound_format ) {
 
     /* Reset the spectrum buffer */
     for( i = 0; i < SPECTRUM_WINDOW_SIZE; i++ ) {
+        spectrum_info.in[i].im = 0.0;
+        spectrum_info.in[i].re = 0.0;
         spectrum_info.out[i].im = 0.0;
         spectrum_info.out[i].re = 0.0;
     }
