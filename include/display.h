@@ -34,6 +34,8 @@ void *display_monitor( void *input_data );
 /* Draw Sections of the Screen */
 void draw_screen( void );
 #ifdef EMPEG
+void set_display_brightness_empeg(int brightness);
+void draw_song_empeg( song_info_t *song, bool current_song );
 void draw_empeg_display( void );
 #endif
 #ifndef NO_NCURSES

@@ -1,23 +1,11 @@
-This lists what features have been completed or not for the empeg port
+This lists what features have not been completed for the empeg port
 of squash.
 
-DONE:
-Displays Current Song
-Allows Button Presses
-Uses Masterlist to aid startup time
-Volume Control
-Turns off display after quit
-Reasonably good looking display
-Turn off player
-Buffer Audio
-
-NOT DONE:
+Better sound driver
+    Squash currently only plays 44.1khz, stereo 16 bit little endian
+    streams, because the current sound driver is not advanced and is
+    limited to the empeg's DSP's preferred format.
 Spectrum analyzer port
-Better magic (some files not detected)
-Fix invalid lseek() in tremor and a few others (probably the toolchain)
-Long button presses, more interface
-Add remote button
 Confirmation for player quit
-Integrate Hijack
-Call sync after writes
+Call sync after writes (?)
 

@@ -30,6 +30,10 @@
 void *power( void *data );
 #endif
 
+#ifndef NO_NCURSES
+void *screen_redraw( void *data );
+#endif
+
 int main( int argc, char *argv[] );
 void _squash_kill( int sig );
 

@@ -10,11 +10,12 @@ file, 'extra/squash.conf'.  Squash will look in '/etc/squash.conf',
 settings and in that order.  You should look at USERS_GUIDE for more
 details.
 
-Now you need to build the database.  The currently provided tools
-do not support putting these files in a separate directory tree (even
-though squash supports having those files in a separate directory tree).
-My suggestion is to fix the tools or to use tar to move the files after
-they are created.
+Now you need to build the database (see below, using the ruby-based
+external tools is optional).  The currently provided tools do not support
+putting these files in a separate directory tree (even though squash
+supports having those files in a separate directory tree).  My suggestion
+is to fix the tools or to use tar to move the files after they are
+created.
 
 To create the database just run import_music.rb with the directory name
 that contains your music.  Note you need to run import_music.rb from the
@@ -22,8 +23,9 @@ same path as the file musicdb_lib.rb .  Or you can move musicdb_lib.rb
 into a directory in your RUBYPATH.
 
 Additionally, you may choose not to run the import_music.rb script and
-just run squash directly.  Support has been added to read both OGG and MP3
-files directly so there is no need to do it by hand if you do not wish to.
+just run squash directly.  Support has been added to read OGG, FLAC and
+MP3 files directly so there is no need to do it by hand if you do not
+wish to.
 
 Now you can run squash.  Please enjoy.
 

@@ -1,6 +1,8 @@
 This document describes how to install the libraries needed to get squash
 running on an empeg.
 
+----- DOWNLOAD -----
+
 I choose to install the libraries by hand.  The libraries needed are:
 libmad, tremor (libivorbisdec) and libFLAC (which also needs libogg).
 You can get the libraries needed at these urls:
@@ -10,19 +12,54 @@ http://www.xiph.org/ogg/vorbis/download/tremor_cvs_snapshot.tgz
 http://dl.sourceforge.net/sourceforge/flac/flac-1.1.0.tar.gz
 http://www.xiph.org/ogg/vorbis/download/libogg-1.0.tar.gz
 
+----- SETUP -----
+
+If you are using the toolchain created with debian, you do not need to
+create any shared libriaries (since it uses much newer glibc it seems
+difficult to get it to run this way on the empeg).  So run these before
+compiling:
+
+export SQ_HOST=arm-linux
+export SQ_PREFIX=/usr/local/i686-linux-gnu
+export SQ_OPTIONS=--enable-static --disable-shared
+
+Otherwise, if you are using the hijack toolchain, you can use shared
+libraries.  Run these before compiling:
+
+export SQ_HOST=arm-empeg-linux
+export SQ_PREFIX=/usr/local/i686-arm-cross
+export SQ_OPTIONS=--enable-static --enable-shared
+
+----- CONFIGURE/COMPILE -----
+
 For libmad use (and then make && make install):
-./configure --build=i686-linux-gnu --host=arm-linux --prefix=/usr/local/i686-linux-gnu --enable-static --disable-shared
+
+./configure --build=i686-linux-gnu --host=$SQ_HOST --prefix=$SQ_PREFIX $SQ_OPTIONS
 
 For tremor (libivorbisdec) use (and then make && make install):
-./autogen.sh --build=i686-linux-gnu --host=arm-linux --prefix=/usr/local/i686-linux-gnu --enable-static --disable-shared
 
-For libogg (needed for libFLAC), run these two commands (and then make
+./autogen.sh --build=i686-linux-gnu --host=$SQ_HOST --prefix=$SQ_PREFIX $SQ_OPTIONS
+
+For libogg (needed for libFLAC), run these thre commands (and then make
 && make install):
-./configure --build=i686-linux-gnu --host=arm-linux --prefix=/usr/local/i686-linux-gnu --enable-static --disable-shared
-find -name Makefile -exec perl -i -pe's/CC = gcc/CC = arm-linux-gcc/' "{}" \;
 
-For libFLAC use (and then make && make install):
-LDFLAGS=-L/usr/c++/lib ./configure --build=i686-linux-gnu --host=arm-linux --prefix=/usr/local/i686-linux-gnu --enable-static --disable-shared
+./configure --build=i686-linux-gnu --host=$SQ_HOST --prefix=$SQ_PREFIX $SQ_OPTIONS
+find -name Makefile -exec perl -i -pe's/CC = gcc/CC = `$SQ_HOST`-gcc/' "{}" \;
+perl -i -pe's/CC="gcc"/CC="`$SQ_HOST`-gcc"/ libtool
+
+For libFLAC, add "LDFLAGS=-L/usr/c++/lib " to the front of the command
+if you are using the debian toolchain (and then make && make install):
+
+./configure --build=i686-linux-gnu --host=$SQ_HOST --prefix=$SQ_PREFIX $SQ_OPTIONS
+
+----- INSTALL ------
+
+The libraries are now in $SQ_PREFIX's lib directory.  If you are using
+the hijack toolchain you need to copy the shared libraries (*.so*) onto
+the empeg.  I suggest using tar to tar the files, then ftp the tar file
+to the empeg.  This ensures that you get the symlinks correct.
+
+----- OTHER LIBRARIES -----
 
 I have not tried to install libncurses or libfftw.  If you would like
 to try this, you may reenable these features in the Makefile (it's

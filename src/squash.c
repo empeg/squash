@@ -26,11 +26,10 @@
 #include "display.h"            /* for display_monitor() */
 #include "input.h"              /* for keyboard_monitor(), fifo_monitor() */
 #include "spectrum.h"           /* for spectrum_monitor() */
+#include "sound.h"              /* for sound_init() sound_shutdown() */
 #ifdef EMPEG
 #include "vfdlib.h"             /* for exit status display */
 #include <sys/ioctl.h>          /* for ioctl() */
-#include "sys/soundcard.h"      /* for _SIO*() macros */
-#include <sys/mount.h>          /* for mount() */
 #endif
 #include "squash.h"
 
@@ -73,6 +72,22 @@ void *power(void *data) {
 }
 #endif
 
+#ifndef NO_NCURSES
+void *screen_redraw(void *data) {
+    struct timespec sleep_time = { 1, 000000000 };
+    while(1) {
+        nanosleep( &sleep_time, NULL );
+        squash_lock( display_info.lock );
+        if( display_info.too_small ) {
+            draw_screen();
+        }
+        squash_unlock( display_info.lock );
+    }
+
+    return (void *)NULL;
+}
+#endif
+
 /*
  * Program entry point
  */
@@ -84,6 +99,7 @@ int main( int argc, char *argv[] ) {
 #endif
 #ifndef NO_NCURSES
     pthread_t keyboard_input_thread;
+    pthread_t screen_redraw_thread;
 #endif
     pthread_t fifo_input_thread;
     pthread_t player_thread;
@@ -117,19 +133,7 @@ int main( int argc, char *argv[] ) {
     squash_log( "Log initialized" );
 #endif
 
-#ifdef EMPEG
-    {   /* set the mixer to half-way (this will be move out of squash later) */
-        int mixer;
-        int raw_vol = 50 + (50 << 8);
-        if ((mixer = open("/dev/mixer", O_RDWR)) == -1) {
-            fprintf(stderr, "Can't open /dev/mixer");
-            exit(1);
-        }
-        ioctl( mixer, _SIOWR('M', 0, int), &raw_vol );
-    }
-#endif
-
-    /* TODO: Move this it's own procedure.  What should be
+   /* TODO: Move this it's own procedure.  What should be
      * done about two squash's running at once?  Perhaps
      * pid should be added to the name.  Also, unlink any
      * fifo's found that are of pid's that don't exist anymore.
@@ -155,9 +159,12 @@ int main( int argc, char *argv[] ) {
     /* Initilize the display */
     display_init();
     display_info.state = SYSTEM_LOADING;
-    /* Set focus, unless there is no focus. */
+    /* Set focus. */
 #ifndef NO_NCURSES
     display_info.focus = WIN_NOW_PLAYING;
+#endif
+#ifdef EMPEG
+    display_info.cur_screen = EMPEG_SCREEN_PLAY;
 #endif
 
     /* Initialize the windows, unless there are no windows */
@@ -192,6 +199,15 @@ int main( int argc, char *argv[] ) {
     song_queue.size = 0;
     song_queue.wanted_size = 0; /* set by database startup thread */
 
+    /* Initialize State Info */
+    state_info.raw_songs = NULL;
+    state_info.current_song = 0;
+    state_info.raw_song_count = 0;
+    state_info.raw_song_alloc = 0;
+    state_info.cur_window_number = 0;
+    state_info.volume = 100;
+    state_info.brightness = 100;
+
     /* Initialize Past Queue */
     past_queue.head = NULL;
     past_queue.tail = NULL;
@@ -207,20 +223,25 @@ int main( int argc, char *argv[] ) {
     player_info.song = NULL;
     player_info.current_position = 0;
     squash_malloc( frame_buffer.frames, PLAYER_MAX_BUFFER_SIZE * sizeof( frame_data_t ) );
-    frame_buffer.song_eof = TRUE;
+    frame_buffer.song_eof = FALSE;
+    frame_buffer.new_file = FALSE;
     frame_buffer.size = 0;
     frame_buffer.pcm_size = 0;
     frame_buffer.decoder_function = NULL;
     frame_buffer.decoder_data = NULL;
+
+    /* Initialize the audio device */
+    sound_init();
 
     /* Draw the screen */
     draw_screen();
 
     squash_log("starting threads...");
     pthread_attr_init( &thread_attr );
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_OTHER );
     /* Find out the scheduling values if we are on the empeg, so that we can use realtime mode */
 #ifdef EMPEG
-    pthread_attr_setschedpolicy( &thread_attr, SCHED_RR );
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_FIFO );
     pthread_attr_getschedpolicy( &thread_attr, &thread_policy );
     squash_log("policy %d, other %d, rr %d, fifo %d", thread_policy, SCHED_OTHER, SCHED_RR, SCHED_FIFO );
     pthread_getschedparam( 0, NULL, &thread_sched_param );
@@ -231,9 +252,9 @@ int main( int argc, char *argv[] ) {
     medium_priority = (high_priority+low_priority)/2;
 
     /* Start support threads */
-    thread_sched_param.sched_priority = high_priority;
+    thread_sched_param.sched_priority = medium_priority;
     pthread_attr_setschedparam( &thread_attr, &thread_sched_param );
-    pthread_attr_setschedpolicy( &thread_attr, SCHED_RR );
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_FIFO );
 #endif
 
     squash_log("starting display");
@@ -242,7 +263,7 @@ int main( int argc, char *argv[] ) {
 #ifdef EMPEG
     thread_sched_param.sched_priority = low_priority;
     pthread_attr_setschedparam( &thread_attr, &thread_sched_param );
-    pthread_attr_setschedpolicy( &thread_attr, SCHED_RR );
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_FIFO );
 #endif
 
     squash_log("starting database");
@@ -257,26 +278,37 @@ int main( int argc, char *argv[] ) {
 #endif
 
 #ifdef EMPEG
-    pthread_attr_setschedpolicy( &thread_attr, SCHED_RR );
-    thread_sched_param.sched_priority = medium_priority;
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_FIFO );
+    thread_sched_param.sched_priority = high_priority-1;
     pthread_attr_setschedparam( &thread_attr, &thread_sched_param );
 #endif
     /* Start playing */
     squash_log("starting frame decoder");
     pthread_create( &frame_decoder_thread, &thread_attr, frame_decoder, (void *)NULL );
 
+#ifdef EMPEG
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_FIFO );
+    thread_sched_param.sched_priority = high_priority;
+    pthread_attr_setschedparam( &thread_attr, &thread_sched_param );
+#endif
     squash_log("starting player");
     pthread_create( &player_thread, &thread_attr, player, (void *)NULL );
 
 #ifdef EMPEG
-    thread_sched_param.sched_priority = low_priority;
+    thread_sched_param.sched_priority = medium_priority;
     pthread_attr_setschedparam( &thread_attr, &thread_sched_param );
-    pthread_attr_setschedpolicy( &thread_attr, SCHED_RR );
-#endif
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_FIFO );
+
+    squash_log("starting fifo");
+    pthread_create( &fifo_input_thread, &thread_attr, fifo_monitor, (void *)NULL );
+
     /* Listen for input */
-#ifdef EMPEG
     squash_log("starting ir");
     pthread_create( &ir_input_thread, &thread_attr, ir_monitor, (void *)NULL );
+
+    thread_sched_param.sched_priority = low_priority+1;
+    pthread_attr_setschedparam( &thread_attr, &thread_sched_param );
+    pthread_attr_setschedpolicy( &thread_attr, SCHED_FIFO );
 
     squash_log("starting power");
     pthread_create( &power_thread, &thread_attr, power, (void *)NULL );
@@ -284,9 +316,9 @@ int main( int argc, char *argv[] ) {
 #ifndef NO_NCURSES
     squash_log("starting keyboard");
     pthread_create( &keyboard_input_thread, &thread_attr, keyboard_monitor, (void *)NULL );
+    squash_log("starting screen redraw");
+    pthread_create( &screen_redraw_thread, &thread_attr, screen_redraw, (void *)NULL );
 #endif
-    squash_log("starting fifo");
-    pthread_create( &fifo_input_thread, &thread_attr, fifo_monitor, (void *)NULL );
 
     squash_log("threads started, waiting till done");
 
@@ -305,6 +337,7 @@ int main( int argc, char *argv[] ) {
 #endif
 #ifndef NO_NCURSES
     pthread_cancel( keyboard_input_thread );
+    pthread_cancel( screen_redraw_thread );
 #endif
     pthread_cancel( fifo_input_thread );
     pthread_cancel( display_thread );
@@ -315,6 +348,9 @@ int main( int argc, char *argv[] ) {
     pthread_cancel( player_thread );
     pthread_cancel( frame_decoder_thread );
 
+    /* Save the state */
+    save_state();
+
     /* Bring ncurses down, unless there is no ncurses */
 #ifndef NO_NCURSES
     /* Shut down ncurses */
@@ -323,6 +359,9 @@ int main( int argc, char *argv[] ) {
     /* Reset the screen (some more) */
     reset_shell_mode();
 #endif
+
+    /* Shutdown the sound device */
+    sound_shutdown();
 
     if( fifo_info.fifo_file != NULL ) {
         fclose( fifo_info.fifo_file );

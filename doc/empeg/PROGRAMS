@@ -1,21 +1,29 @@
-
 This document describes how to install additional programs you probably
 will want or need with squash on an empeg.
 
 You need to install a dhcp client, in order to have the empeg setup it's
 network interface (the original player used to do this for you).
 
-I choose dhcpcd because I was having problems with pump.  (I believe
-my toolchain is not perfect yet and both the tremor library and pump
-manifest this problem).
+I choose dhcpcd because I was having problems with pump when using the
+debian toolchain.  However, the hijack toolchain could probably compile
+pump correctly; feel free to try it out.
 
 You can get dhcpcd from this url:
+
 http://www.phystech.com/ftp/dhcpcd-1.3.22-pl4.tar.gz
 
-To build use:
+To build, use this if you have the hijack toolchain:
+
+./configure --build=i686-linux-gnu --host=arm-empeg-linux --prefix=/usr/local/i686-arm-cross
+
+Or this if you have the debian toolchain:
+
 ./configure --build=i686-linux-gnu --host=arm-linux --prefix=/usr/local/i686-linux-gnu
 
-Then edit the Makefile and add "-static" to the end of the "LDFLAGS=" line.
+Also (for the debian toolchain only) edit the Makefile and add "-static"
+to the end of the "LDFLAGS=" line.
+
+Next run make.
 
 You then need to copy the dhcpcd executable to the empeg's /bin directory.
 Please see INSTALL_EMPEG for details.

@@ -59,9 +59,9 @@ void sound_init( void ) {
 sound_device_t *sound_open( sound_format_t format ) {
 #ifdef EMPEG_DSP
     sound_device_t *t;
-    squash_malloc( t, sizeof(sound_device_t) );
     int i;
     int raw_vol;
+    squash_malloc( t, sizeof(sound_device_t) );
 
     squash_malloc( t->buffer, EMPEG_AUDIO_BUFFER_SIZE );
     t->buffer_size = 0;
@@ -101,6 +101,25 @@ sound_device_t *sound_open( sound_format_t format ) {
     default_driver = ao_default_driver_id();
 
     return ao_open_live( default_driver, &format, NULL );
+#endif
+}
+
+void sound_set_volume( sound_device_t *sound, int value ) {
+#ifdef EMPEG_DSP
+    int raw_vol;
+    if( sound != NULL ) {
+        if( value > 100 ) {
+            value = 100;
+        }
+        if( value < 0 ) {
+            value = 0;
+        }
+        squash_log("setting volume to %d", value);
+        sound->volume[0] = value;
+        sound->volume[1] = value;
+        raw_vol = sound->volume[0] + (sound->volume[1] << 8);
+        ioctl( sound->mixer, _SIOWR('M', 0, int), &raw_vol );
+    }
 #endif
 }
 
@@ -164,6 +183,20 @@ void sound_play( frame_data_t frame_data, sound_device_t *sound_device ) {
  */
 void sound_close( sound_device_t *device ) {
 #ifdef EMPEG_DSP
+    /*
+     * Let's play it safe, if we close and the buffer still has information,
+     * we will flush the buffer.  But since we can only write out whole bytes
+     * of EMPEG_AUDIO_BUFFER_SIZE, we will fill up any slack with zero's first.
+     */
+    if( device->buffer_size != 0 ) {
+        int buffer_remain;
+        buffer_remain = EMPEG_AUDIO_BUFFER_SIZE - device->buffer_size;
+        memset( &device->buffer[device->buffer_size], 0, buffer_remain );
+        if( (write( device->audio, device->buffer, EMPEG_AUDIO_BUFFER_SIZE )) == -1 ) {
+           squash_error("problem writing to " EMPEG_AUDIO_DEVICE );
+        }
+        device->buffer_size = 0;
+    }
     close( device->audio );
     close( device->mixer );
     squash_free( device->buffer );

@@ -8,6 +8,8 @@ itself does not require a lock beforehand.  And condition variables
 (which are within the structure) also do not need a lock obtained
 beforehand.
 
+state_info.lock
+
 display_info.lock   As above, and any call to ncurses (such as
                     getch() or wgetyx() ).
 

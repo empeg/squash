@@ -1,7 +1,7 @@
 squash is a music player.
 
 squash is the best music player.  Specifically, squash will ensure
-you do not spend valuable time in order to listen to your music.
+you do not waste valuable time in order to listen to your music.
 
 The player accomplishes this by automatically picking good music more
 often than bad music.  It also will not play the same song over and
@@ -51,13 +51,16 @@ available, but not enabled by default.
 Support for removal of fftw and id3lib libraries.  But spectrum and
 id3v2/mp3 tag support, respectively, will also be removed.
 
-Support for removal of ncurses will be added later.
+Support for removal of ncurses, generally in favor of using the empeg's
+LCD screen.
 
 To compile squash just run 'make'.  There are some configuration
 options, though specifying them is currently clunky:
 
 EMPEG               turn on and off various settings to allow squash
-                    to run on an empeg device
+                    to run on an empeg device, but please read the
+                    doc/empeg section first before trying to use squash
+                    on the empeg.
 EMPEG_DSP           use empeg dsp directly instead of libao
 USE_MAGIC           if filename doesn't end in a proper extension,
                     try reading the magic bytes at the front of the

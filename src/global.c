@@ -23,6 +23,12 @@
 
 #include "global.h"
 #include "database.h"
+#include "playlist_manager.h" /* for playlist_queue_song() */
+#include "sound.h" /* for sound_set_volume() */
+#ifdef EMPEG_DSP
+#include <sys/ioctl.h>          /* for ioctl() */
+#include "sys/soundcard.h"      /* for _SIO*() macros */
+#endif
 #include "display.h"
 
 /* File Extensions to use. */
@@ -43,15 +49,227 @@ config_keys_t config_keys[ CONFIG_KEY_COUNT ] = {
     { "Database", "Readonly", (void *)&config.db_readonly, TYPE_INT },
     { "Database", "Save_Info", (void *)&config.db_saveinfo, TYPE_INT },
     { "Database", "Overwrite_Info", (void *)&config.db_overwriteinfo, TYPE_INT },
+    { "Global", "State_Filename", (void *)&config.global_state_path, TYPE_STRING },
     { "Global", "Control_Filename", (void *)&config.input_fifo_path, TYPE_STRING },
 #ifdef DEBUG
     { "Global", "Log_Filename", (void *)&config.squash_log_path, TYPE_STRING },
 #endif
-    { "Playlist", "Filename", (void *)&config.playlist_manager_playlist_path, TYPE_STRING },
+#ifdef EMPEG_DSP
+    { "Empeg", "save_volume_minimum", (void *)&config.min_save_volume, TYPE_INT },
+    { "Empeg", "save_volume_maximum", (void *)&config.max_save_volume, TYPE_INT },
+#endif
     { "Playlist", "Size", (void *)&config.playlist_manager_playlist_size, TYPE_INT },
     { "Pastlist", "Size", (void *)&config.playlist_manager_pastlist_size, TYPE_INT }
 };
 
+void save_state() {
+    song_info_t *cur_song;
+    long cur_pos;
+    FILE *state_file;
+    time_t current_time;
+    song_queue_entry_t *cur_song_queue_entry;
+
+    if( config.db_readonly ) {
+        return;
+    }
+
+    /* Open the file to write out the state */
+    if( (state_file = fopen(config.global_state_path, "w")) == NULL ) {
+        squash_error( "Can't open file \"%s\" for writing", config.global_state_path );
+    }
+
+    /* Write out header */
+    time( &current_time );
+    fprintf( state_file, "# Saved Squash state\n" );
+    fprintf( state_file, "# Auto-Generated on %s\n", ctime(&current_time) );
+
+    /* Write out the state */
+    cur_song = player_info.song;
+    cur_pos = player_info.current_position;
+    fprintf(state_file, "current_entry=0\n");
+    if( cur_song ) {
+        fprintf(state_file, "entry_filename=%s/%s\n", cur_song->basename[ BASENAME_SONG ], cur_song->filename);
+        fprintf(state_file, "entry_position=%ld\n", cur_pos);
+    }
+
+    for( cur_song_queue_entry = song_queue.head; cur_song_queue_entry != NULL; cur_song_queue_entry = cur_song_queue_entry->next ) {
+        cur_song = cur_song_queue_entry->song_info;
+        cur_pos = cur_song_queue_entry->start_position;
+        fprintf(state_file, "entry_filename=%s/%s\n", cur_song->basename[ BASENAME_SONG ], cur_song->filename);
+        fprintf(state_file, "entry_position=%ld\n", cur_pos);
+    }
+
+    while( state_info.current_song < state_info.raw_song_count ) {
+        fprintf(state_file, "entry_filename=%s\n", state_info.raw_songs[state_info.current_song].filename );
+        fprintf(state_file, "entry_position=%ld\n", state_info.raw_songs[state_info.current_song].position );
+        state_info.current_song++;
+    }
+
+#ifdef EMPEG_DSP
+    if( player_info.device ) {
+        int volume = player_info.device->volume[0];
+        if( volume > config.max_save_volume ) {
+            volume = config.max_save_volume;
+        } else if( volume < config.min_save_volume ) {
+            volume = config.min_save_volume;
+        }
+        fprintf(state_file, "volume=%d\n", volume);
+    }
+#endif
+
+#ifdef EMPEG
+    fprintf( state_file, "brightness=%d\n", display_info.brightness );
+#endif
+
+#ifndef NO_NCURSES
+    {
+        int i;
+        for( i = 0; i < WIN_COUNT; i++ ) {
+            fprintf(state_file, "window_number=%d\n", i);
+            fprintf(state_file, "window_state=%d\n", display_info.window[i].state);
+        }
+    }
+#endif
+
+    /* Close the state file */
+    fclose( state_file );
+}
+
+/*
+ * The data structures used by the callback load_state_callback() and the
+ * function load_state()
+ */
+
+/* Used by parse_file() to set state values read */
+void load_state_callback( void *data, char *header, char *key, char *value ) {
+    state_info_t *pass = data;
+
+    squash_ensure_alloc( pass->raw_song_count, pass->raw_song_alloc, pass->raw_songs, sizeof(state_raw_song_t), 10, *=2 );
+
+    /* Add it to the structure */
+    if( strncasecmp("entry_filename", key, 16) == 0 ) {
+        pass->raw_songs[pass->raw_song_count].filename = value;
+        pass->raw_songs[pass->raw_song_count].position = 0;
+    } else if( strncasecmp("entry_position", key, 16) == 0 ) {
+        pass->raw_songs[pass->raw_song_count].position = atol(value);
+        pass->raw_song_count++;
+        squash_free( value );
+    } else if( strncasecmp("current_entry", key, 15) == 0 ) {
+        pass->current_song = atol(value);
+        squash_free( value );
+    }
+#ifdef EMPEG_DSP
+    else if( strncasecmp("volume", key, 7) == 0 ) {
+        pass->volume = atoi(value);
+        squash_free( value );
+    }
+#endif
+#ifdef EMPEG
+    else if( strncasecmp("brightness", key, 11) == 0 ) {
+        pass->brightness = atoi(value);
+        squash_free( value );
+    }
+#endif
+#ifndef NO_NCURSES
+    else if( strncasecmp("window_number", key, 14) == 0 ) {
+        pass->cur_window_number = atoi(value);
+        squash_free( value );
+    } else if ( strncasecmp("window_state", key, 13) == 0 ) {
+        pass->window_states[pass->cur_window_number] = atoi(value);
+        squash_free( value );
+    }
+#endif
+
+    squash_free( key );
+}
+
+/*
+ * Load state
+ *
+ */
+void load_state() {
+    song_info_t *song;
+    int i;
+
+    squash_lock( state_info.lock );
+    state_info.raw_songs = NULL;
+    state_info.current_song = 0;
+    state_info.raw_song_count = 0;
+    state_info.raw_song_alloc = 0;
+    state_info.cur_window_number = 0;
+    state_info.volume = 50;
+    state_info.brightness = 100;
+#ifndef NO_NCURSES
+    for( i = 0; i < WIN_COUNT; i++ ) {
+        state_info.window_states[i] = WIN_STATE_NORMAL;
+    }
+#endif
+
+    parse_file( config.global_state_path, load_state_callback, &state_info );
+
+#ifdef EMPEG_DSP
+    {
+        int mixer;
+        int raw_vol = state_info.volume + (state_info.volume << 8);
+        if ((mixer = open("/dev/mixer", O_RDWR)) == -1) {
+            fprintf(stderr, "Can't open /dev/mixer");
+            exit(1);
+        }
+        ioctl( mixer, _SIOWR('M', 0, int), &raw_vol );
+    }
+#endif
+
+#ifdef EMPEG
+    squash_lock( display_info.lock );
+    display_info.brightness = state_info.brightness;
+    set_display_brightness_empeg( display_info.brightness );
+    squash_unlock( display_info.lock );
+#endif
+
+    squash_unlock( state_info.lock );
+
+
+#ifndef NO_NCURSES
+    squash_lock( state_info.lock );
+    squash_lock( display_info.lock );
+    for( i = 0; i < WIN_COUNT; i++ ) {
+        display_info.window[i].state = state_info.window_states[i];
+    }
+    squash_unlock( display_info.lock );
+    squash_unlock( state_info.lock );
+#endif
+
+    squash_lock(state_info.lock);
+    while( state_info.current_song < state_info.raw_song_count ) {
+        squash_wlock(database_info.lock);
+        squash_lock(song_queue.lock);
+        squash_log("adding: %d, %s", state_info.raw_songs[state_info.current_song].position, state_info.raw_songs[state_info.current_song].filename);
+        song = find_song_by_filename(state_info.raw_songs[state_info.current_song].filename);
+        if( song != NULL ) {
+            playlist_queue_song( song, state_info.raw_songs[state_info.current_song].position );
+        }
+        state_info.current_song++;
+        squash_unlock(state_info.lock);
+        squash_wunlock(database_info.lock);
+        squash_unlock(song_queue.lock);
+        squash_unlock(state_info.lock);
+        squash_broadcast( song_queue.not_empty );
+        squash_broadcast( display_info.changed );
+        sched_yield();
+        squash_lock(state_info.lock);
+    }
+
+    for( i = 0; i < state_info.raw_song_count; i++ ) {
+        squash_free( state_info.raw_songs[i].filename );
+    }
+    squash_free( state_info.raw_songs );
+
+    state_info.current_song = 0;
+    state_info.raw_song_count = 0;
+    state_info.raw_song_alloc = 0;
+    squash_unlock( state_info.lock );
+
+}
 
 /*
  * Return the file format of the song (mp3, ogg, etc.).
@@ -501,10 +719,15 @@ void init_config( void ) {
     config.db_overwriteinfo = 0;
 
     /* Control Options */
+    config.global_state_path = strdup("~/.squash_state");
     config.input_fifo_path = strdup("~/.squash_control");
 
+#ifdef EMPEG_DSP
+    config.min_save_volume = 40;
+    config.max_save_volume = 70;
+#endif
+
     /* Playlist Manager Options */
-    config.playlist_manager_playlist_path = strdup("~/.squash_playlist");
     config.playlist_manager_playlist_size = 32;
     config.playlist_manager_pastlist_size = 32;
 
@@ -519,7 +742,7 @@ void init_config( void ) {
     parse_file( "/etc/squash.conf", set_config, NULL );
 
     /* Load user squash.conf */
-    config_path = "~/.squash";
+    config_path = strdup("~/.squash");
     expand_path( &config_path );
     parse_file( config_path, set_config, NULL );
     free( config_path );
@@ -530,14 +753,23 @@ void init_config( void ) {
     }
 
     /* Expand Paths */
+    expand_path( &config.global_state_path );
     expand_path( &config.input_fifo_path );
-    expand_path( &config.playlist_manager_playlist_path );
     expand_path( &config.db_paths[ BASENAME_SONG ] );
     expand_path( &config.db_paths[ BASENAME_META ] );
     expand_path( &config.db_paths[ BASENAME_STAT ] );
     expand_path( &config.db_masterlist_path );
 #ifdef DEBUG
     expand_path( &config.squash_log_path );
+#endif
+
+#ifdef EMPEG_DSP
+    if( config.min_save_volume < 0 ) {
+        config.min_save_volume = 0;
+    }
+    if( config.max_save_volume > 100 ) {
+        config.max_save_volume = 100;
+    }
 #endif
 
     /* Update any remaining defaults */

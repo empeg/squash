@@ -7,22 +7,33 @@
 
 # Complier Flags
 CC		:= gcc
-CFLAGS	:= -O3 -std=gnu99 -pedantic -Wall
+CFLAGS	:= -O3 -pedantic -Wall
 INCLUDE	:= -Iinclude
 LDFLAGS	:= -lFLAC -lmad -lpthread -lm
 
 ifdef EMPEG
-	CC := arm-linux-gcc
+# top sub menu means top button acts as submenu, otherwise bottom button held acts as submenu
+CFLAGS := -DTOP_SUB_MENU $(CFLAGS)
+
+# Use this if you are using the debian tool chain
+#	CC := arm-linux-gcc
+#	INCLUDE	:=	$(INCLUDE) -I/usr/local/i686-linux-gnu/include -I/usr/arm-linux/include
+#	LDFLAGS	:=	-L/usr/local/i686-linux-gnu/lib -L/usr/arm-linux/lib $(LDFLAGS)
+#	LDFLAGS	:=	-static $(LDFLAGS)
+
+# Use this if you are using the hijack tool chain
+	CC := arm-empeg-linux-gcc
+	INCLUDE	:=	$(INCLUDE) -I/usr/local/i686-arm-cross/include -I/usr/local/armtools-empeg/include
+	LDFLAGS	:=	-L/usr/local/i686-arm-cross/lib -L/usr/local/armtools-empeg/lib $(LDFLAGS)
+
 	NO_NCURSES := 1
 	EMPEG_DSP := 1
 	NO_FFTW := 1
 	NO_ID3LIB := 1
 	TREMOR := 1
 	CFLAGS := -DEMPEG $(CFLAGS)
-	INCLUDE	:=	$(INCLUDE) -I/usr/local/i686-linux-gnu/include -I/usr/arm-linux/include
-	LDFLAGS	:=	-L/usr/local/i686-linux-gnu/lib -L/usr/arm-linux/lib $(LDFLAGS)
-
-	LDFLAGS	:=	-static $(LDFLAGS)
+else
+	CFLAGS := --std=gnu99
 endif
 
 ifdef USE_MAGIC
@@ -80,7 +91,7 @@ ifdef DEBUG
 	CFLAGS := -g -DDEBUG $(CFLAGS)
 endif
 
-MAKEFLAGS := -j5
+#MAKEFLAGS := -j5
 
 # Setup path information
 vpath %.c src
@@ -131,13 +142,13 @@ database.o: %.o : %.c %.h global.h stat.h player.h display.h play_ogg.h play_mp3
 stat.o: %.o : %.c %.h global.h database.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
-global.o: %.o : %.c %.h display.h database.h
+global.o: %.o : %.c %.h display.h database.h playlist_manager.h sound.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
-input.o: %.o : %.c %.h global.h display.h player.h database.h stat.h
+input.o: %.o : %.c %.h global.h display.h player.h database.h sound.h stat.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
-squash.o: %.o : %.c %.h global.h player.h playlist_manager.h database.h display.h input.h spectrum.h
+squash.o: %.o : %.c %.h global.h player.h playlist_manager.h database.h display.h input.h spectrum.h sound.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
 vfdlib.o: empeg/vfdlib.h empeg/vfdlib.c

@@ -1,21 +1,70 @@
 Please see the regular USERS_GUIDE for configuration settings, and the
 empeg/INSTALL file for how to get squash running on the empeg.
 
-Once squash is running the current keymap is this:
+While squash is running there are several screens, menus and submenus you
+may navigate.  If you are on a screen you may hit UP to access a submenu
+(if any) and DOWN to access the most immediate submenu/menu or screen.
 
-UP          Play/Pause
-LEFT        Stop
-RIGHT       Skip
-DOWN        Quit
-KNOB LEFT   Lower volume
-KNOW RIGHT  Raise volume
+At any time you may use the knob to adjust your volume.
+
+The screens present are:
+
+Currently Playing:
+
+This screen shows the currently playing song and the current volume.  LEFT
+Stop's the playback, RIGHT skips to the next song in the playlist.
+
+Currently Playing Submenu:
+
+TOP         Play/Pause
+LEFT
+RIGHT       Song Info
+DOWN        Back to Currently Playing
+
+Playlist:
+
+This screen shows the current playlist's entries.  LEFT and RIGHT navigate
+between items.
+
+Playlist Submenu:
+
+TOP         Remove from playlist
+LEFT
+RIGHT       Song Info
+DOWN        Back to Playlist
+
+Song Info:
+
+This screen shows a song's filename (the first line), and it's statistics
+along with the average and stddev statistics for all songs.  The statistics
+consist of the rating, play count and skip count.  Rating is defined as:
+
+(plays - skips)/(plays + skips + 1)
+
+Any of UP, DOWN, LEFT or RIGHT will exit the song info screen and return you
+to either Currently Playing or else the Playlist.
+
+Menu Screen 1:
+
+TOP         Currently Playing
+LEFT        Playlist
+RIGHT
+DOWN        Next Menu
+
+Menu Screen 2:
+
+TOP         Quit Squash
+LEFT        Delete the Master List
+RIGHT       Set Display Brightness
+DOWN        Next Menu
+
+Concerning the Masterlist:
 
 Please note that you will probably want to use the [database]
 masterlist_filename option to speed load times.  However, if you change
 what music is on the empeg, you must delete this file for squash to notice
-the new files.  (It will probably crash too if you do not).  You can
-have squash regenerate the file for you (which takes a little while if
-you have USE_MAGIC support), or you can just generate it yourself,
+the new files.  You can have squash regenerate the file for you (which
+takes a little while), or you can just generate it yourself.
 
 Assuming you have a copy of the music you have send to the player on
 your local linux box this should work:
@@ -24,14 +73,17 @@ find the_music -type f \( -iname '*.mp3' -or -iname '*.ogg' \) -printf
 "%P\n" > squash_masterlist
 
 The masterlist must only contain existing files, and these files must
-be either mp3s or oggs.  Otherwise squash will probably bomb.
+be either mp3s, oggs or flacs.
+
+Most importantly, if you have added files to the empeg, but forgot to delete
+the masterlist, you may have squash delete the masterlist for you, then
+exit squash and then reboot the empeg.  This is handy if you are in the car
+when you noticed your new music wasn't noticed.
+
+Concerning the Harddrive:
 
 IMPORTANT NOTE:  The squash currently needs to have the media drive mounted
 read write.  If you do not like this, you can turn off the statistics engine
 with the readonly option.
 
-Also, squash does not yet turn the empeg off.  In order to turn off the empeg
-unit first hit the down key to turn off squash.  Wait a few seconds, then
-pull the empeg unit out of it's cradle.  Replace the empeg, and it should stay
-off.
 

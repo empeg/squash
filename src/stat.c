@@ -41,28 +41,23 @@ double get_rating( stat_info_t stat ) {
  */
 void start_song_picker() {
     int i;
-    double sum = 0.0;
-    double sqr_sum = 0.0;
-    long play_sum = 0.0;
-    long play_sqr_sum = 0.0;
-    long skip_sum = 0.0;
-    long skip_sqr_sum = 0.0;
+
+    squash_wlock( database_info.lock );
     for( i = 0; i < database_info.song_count; i++ ) {
-        double rating = get_rating( database_info.songs[i].stat );
-        sum += rating;
-        sqr_sum += rating * rating;
-        play_sum += database_info.songs[i].stat.play_count;
-        play_sqr_sum += database_info.songs[i].stat.play_count * database_info.songs[i].stat.play_count;
-        skip_sum += database_info.songs[i].stat.skip_count;
-        skip_sqr_sum += database_info.songs[i].stat.skip_count * database_info.songs[i].stat.skip_count;
+        double rating;
+        squash_wunlock( database_info.lock );
+        sched_yield();
+        squash_wlock( database_info.lock );
+        rating = get_rating( database_info.songs[i].stat );
+        database_info.sum += rating;
+        database_info.sqr_sum += rating * rating;
+        database_info.play_sum += database_info.songs[i].stat.play_count;
+        database_info.play_sqr_sum += database_info.songs[i].stat.play_count * database_info.songs[i].stat.play_count;
+        database_info.skip_sum += database_info.songs[i].stat.skip_count;
+        database_info.skip_sqr_sum += database_info.songs[i].stat.skip_count * database_info.songs[i].stat.skip_count;
     }
-    database_info.sum = sum;
-    database_info.sqr_sum = sqr_sum;
-    database_info.play_sum = play_sum;
-    database_info.play_sqr_sum = play_sqr_sum;
-    database_info.skip_sum = skip_sum;
-    database_info.skip_sqr_sum = skip_sqr_sum;
     database_info.stats_loaded = TRUE;
+    squash_wunlock( database_info.lock );
 }
 
 /*
@@ -70,11 +65,11 @@ void start_song_picker() {
  * deviation) to convert X to a Z value.
  */
 bool normal_test( double x, double a, double s ) {
-    double pdf[5] = {    0.0000,
-                        0.3413,
-                        0.4772,
-                        0.4987,
-                        0.5000 };
+    double pdf[5] = { 0.0000,
+                      0.3413,
+                      0.4772,
+                      0.4987,
+                      0.5000 };
     double z;
     bool sign;
     int pdf_pos;

@@ -23,7 +23,6 @@
 #define SQUASH_DATABASE_H
 
 #include <dirent.h> /* For readdir(), etc. */
-#include <pthread.h>
 
 /* Initial database allocation size */
 #define INITIAL_DB_SIZE 2500

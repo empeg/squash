@@ -12,13 +12,18 @@ III)    Setting up Squash on the Empeg
 
 I) Compiling Squash
 
+You do not need to compile Squash if you do not want to.  Instead you
+may used the precompiled binaries.  You still need to follow the steps
+in II and III which cover setting up the Empeg for Squash and setting
+up Squash for the Empeg.
+
 Please see empeg/TOOLCHAIN, empeg/LIBRARIES and empeg/PROGRAMS on how to
 install a toolchain, libraries and programs needed to compile and run
 squash for the empeg unit.
 
-You will need to set 'EMPEG=1' and you probably also want 'USE_MAGIC=1'
-(this allows squash to run with the original player's database of mp3
-files).  To do this use:
+For Squash itself, you will need to set 'EMPEG=1' and you probably also
+want 'USE_MAGIC=1' (this allows squash to run with the original player's
+database of mp3 files).  To do this use:
 
 export EMPEG=1 USE_MAGIC=1
 
@@ -27,8 +32,14 @@ already tried to compile squash; or if you have compiled a previous
 version of squash.  In fact, anytime you change the compile settings with
 the 'export' command you must run 'make clean'.
 
-Hopefully squash will compile (if you have really done everything
+Hopefully, squash will compile (if you have really done everything
 described in empeg/TOOLCHAIN, empeg/LIBRARIES and empeg/PROGRAMS).
+
+One cavaet, if you are using the debian toolchain described in the
+empeg/TOOLCHAIN file, you will need to uncomment the debian toolchain
+lines in the Makefile.  You also need to comment the hijack toolchain
+lines in the Makefile.  If you are using the hijack toolchain you do not
+need to modify the Makefile.
 
 Now you will need to read section II on how to setup the empeg.  And
 section III will describe how to configure squash for the empeg.
@@ -37,17 +48,20 @@ II) Setting up the Empeg
 
 If you already have a development image, the hijack kernel (and thus
 an ftp server) and either a telnet daemon or serial terminal setup, you
-can skip down to section XXXX.
+can skip down to section III and begin immediately with setting Squash up
+for the Empeg.
 
 Installing these things can be tricky because some of the steps can have
-small pitfalls.  Sections A through F will cover how to install the
+small pitfalls.  Sections A through G will cover how to install the
 development image and setup minicom.  Also these sections describe how to
 install the hijack kernel, modify your config.ini and install preinit.d,
 telnetd and dhcpcd.
 
 Please note throughout this section it will be assumed you have a free
 serial port COM2 (i.e. /dev/ttyS1).  Also that your player is named orpheus,
-and you have a dhcp server setup.  And that the user name is gryn, etc.
+and you have a dhcp server setup on your local area network.  And that the
+user name is gryn, etc.
+
 Please use your head when reading path names, etc.  Most can be changed
 except where explicitly told otherwise.
 
@@ -93,10 +107,10 @@ chmod g+rw /dev/ttyS1
 
 Now you should be able to run minicom as a regular user.
 
-To verify, turn on the empeg device. You should see lots of messages as
-the empeg boots.  Once the player has finished loading (you know, the
-music starts playing?), try typing 'q'. If all goes well you will be at
-a shell prompt.
+To verify, run minicom and then turn on the empeg device. You should see
+lots of messages as the empeg boots.  Once the player has finished
+loading (you know, the music starts playing?), try typing 'q' in minicom.
+If all goes well you will be at a shell prompt.
 
 II) C) Installing the hijack kernel
 
@@ -160,7 +174,7 @@ Name=orpheus
 # You need to set a static IP address or use DHCP.
 Gateway=10.0.0.1
 Netmask=255.0.0.0
-IPAddress=10.0.1.42
+IPAddress=10.0.0.42
 DHCP=1
 [menu]
 # You may want this setting so that you may exit the original player and
@@ -172,7 +186,7 @@ original player.  Even if you choose to not run it, you will need to have
 these settings until you can install the dhcpcd client, so that you can
 have the network enabled and use ftp.
 
-Now you should be able to ftp into your empeg device! Yeah!  You will
+Now you should be able to ftp into your empeg device!  Yeah!  You will
 still need minicom loaded to type rwm and rom, in order to turn on write
 access when putting files over ftp.
 
@@ -231,7 +245,8 @@ Please see empeg/PROGRAMS on how to download and compile dhcpcd.
 
 Once compiled, just send dhcpcd to the /bin directory and chmod 755 it.
 If you want, you can have it run at bootup through preinit.d .
-Alternatively, you can use the player.script to run dhcpcd.
+Alternatively, you can use the player.script described in section III to run
+dhcpcd.
 
 III) Setting up Squash on the Empeg
 
@@ -262,6 +277,9 @@ To do this backup the old player (/empeg/bin/player).  Now take a look at the
 script empeg/player.script .  If you want the old player to run or if you
 want dhcpcd to not run, you need to edit this file.  Otherwise send it to the
 empeg as /empeg/bin/player .
+
+You also need to send the empeg_poweroff utility to the /bin directory.  Don't
+forget to chmod 755 it.
 
 Hopefully all that will work.  Please contact me if I left out anything or if
 there are any mistakes, etc.

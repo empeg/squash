@@ -43,8 +43,13 @@ Overwrite_Info will cause squash to overwrite current database files
 with the current information in the songs' current tags.
 
 [Global]
+State_Filename=~/.squash_state
 Control_Filename=~/.squash_control
 Log_Filename=~/.squash_log
+
+State_Filename determines the name of the state file.  The State file
+saves several things about Squash's current state such as the playlist
+and the current size of the windows.
 
 Control_Filename determines the name of the control file.  You may send
 squash commands like this: echo pause >> ~/.squash_control
@@ -53,19 +58,25 @@ Log_Filename is intended for debuging purposes only.  It probably will
 not be recognized by a normal installation of squash.
 
 [Playlist]
-Filename=~/.squash_playlist
 Size=16
 
 [Pastlist]
 Size=16
 
-Playlist Filename determines where the playlist is saved after squash
-exits.  squash will load these files into the playlist next time it
-is run.  (Note: squash will ignore any entries on the playlist that do
-not exist in Database Song_Path).
-
 Playlist Size and Pastlist Size determine how many items squash will
 try to keep in each window.
+
+[Empeg]
+Save_Volume_Mininum=40
+Save_Volume_Maximum=70
+
+These settings are currently only available on the empeg version of
+Squash, since these features either do not apply to the PC version or
+else adequate replacements are available on the PC version through
+third party utilities.
+
+Save_Volume_Minimum and Save_Volume_Maximum determine the minimum and
+maximum volume that Squash will save in the state file.
 
 Key presses:
 Q           Quits Squash.

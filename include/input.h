@@ -50,11 +50,36 @@ enum direction_e { UP, DOWN, LEFT, RIGHT, PAGE_UP, PAGE_DOWN, HOME, END };
 #define IR_KNOB_RELEASED                0x00000009
 #define IR_KNOB_RIGHT                   0x0000000a
 #define IR_KNOB_LEFT                    0x0000000b
+#define IR_0                            0x00B94600
+#define IR_1                            0x00B94601
+#define IR_2                            0x00B94602
+#define IR_3                            0x00B94603
+#define IR_4                            0x00B94604
+#define IR_5                            0x00B94605
+#define IR_6                            0x00B94606
+#define IR_7                            0x00B94607
+#define IR_8                            0x00B94608
+#define IR_9                            0x00B94609
+#define IR_TRACK_MINUS                  0x00B9460A
+#define IR_TRACK_PLUS                   0x00B9460B
+#define IR_AM                           0x00B9460C
+#define IR_FM                           0x00B9460D
+#define IR_PROG                         0x00B9460E
+#define IR_DIRECT                       0x00B9460F
+#define IR_VOL_PLUS                     0x00B94614
+#define IR_VOL_MINUS                    0x00B94615
+#define IR_STAR                         0x00B9461B
+#define IR_TUNER                        0x00B9461C
+#define IR_TAPE                         0x00B9461D
+#define IR_CD                           0x00B9461E
+#define IR_CDMDCH                       0x00B9461F
+#define IR_DNPP                         0x00B9465E
 #endif
 
 /*
  * Prototypes
  */
+void process_ir_event( long button, bool held );
 void *ir_monitor( void *input_data );
 void *keyboard_monitor( void *input_data );
 void *fifo_monitor( void *input_data );

@@ -1,8 +1,27 @@
 In order to install squash onto the empeg, you will need a toolchain
 for your computer which can compile programs for the empeg (which is
-a strongARM).  You maybe able to find one that works on the internet.
-This document describes the steps necessary to install one on a debian
-system using debian's tools.
+a strongARM).
+
+I initially was only able to get debian's toolchain to work, but with
+some cavaets.  For instance, the glibc was so new, it was hard to
+use shared libraries on the empeg.  And the glibc had a bug that cause
+some problems with ogg files.
+
+It is unnecessary to use the debian toolchain and instead you may use
+the toolchain provide on the hijack kernel's webpage:
+
+http://empeg-hijack.sourceforge.net/armtools-empeg.tar.bz2
+
+Just untar this file and follow the 'hijack toolchain' instructions
+when building the libraries.  The rest of the build system is already
+defaulted to using this toolchain (i.e. the Makefile).
+
+The rest of this document describes the steps necessary to install
+the debian toolchain on your system using debian's tools.  If you
+want to use this toolchain, follow the 'debian toolchain'
+instructions when building the libraries.  Also you will need to
+modify the top of your Makefile by uncommenting the debian toolchain
+parts and commenting the hijack toolchain parts.
 
 1) Goto http://people.debian.org/~debacle/cross.html .  This guide
 worked for me and I will be following it.  One problem I had with

@@ -70,9 +70,17 @@
  * Definitions
  */
 #ifdef DEBUG
+#ifdef EMPEG_DSP
+    #define CONFIG_KEY_COUNT 14
+#else
     #define CONFIG_KEY_COUNT 12
+#endif
+#else
+#ifdef EMPEG_DSP
+    #define CONFIG_KEY_COUNT 13
 #else
     #define CONFIG_KEY_COUNT 11
+#endif
 #endif
 
 /*
@@ -83,6 +91,24 @@ enum song_type_e { TYPE_UNKNOWN, TYPE_OGG, TYPE_MP3, TYPE_FLAC };
 enum system_state_e { SYSTEM_LOADING, SYSTEM_RUNNING };
 enum data_type_e { TYPE_STRING, TYPE_INT, TYPE_DOUBLE };
 enum meta_type_e { TYPE_META, TYPE_STAT }; /* these match with db_extensions array */
+#ifdef EMPEG
+enum empeg_screen_e {
+    EMPEG_SCREEN_NAVIGATION_1,
+        EMPEG_SCREEN_PLAY,
+            EMPEG_SCREEN_PLAY_SUBMENU,
+                /* PLAY/PAUSE, */
+                EMPEG_SCREEN_PLAY_SONG_INFO,
+        EMPEG_SCREEN_PLAYLIST,
+            EMPEG_SCREEN_PLAYLIST_SUBMENU,
+                /* DELETE SONG, */
+                EMPEG_SCREEN_PLAYLIST_SONG_INFO,
+    EMPEG_SCREEN_NAVIGATION_2,
+        EMPEG_SCREEN_QUIT,
+        EMPEG_SCREEN_DELETE_MASTERLIST,
+        EMPEG_SCREEN_SET_DISPLAY_BRIGHTNESS,
+    EMPEG_SCREEN_NONE
+};
+#endif
 
 /*
  * The difference betwenn STOP and BIG_STOP is that BIG_STOP makes the player
@@ -142,11 +168,16 @@ typedef struct config_s {
     int db_saveinfo;
     int db_overwriteinfo;
 
+    char *global_state_path;
     char *input_fifo_path;
 
-    char *playlist_manager_playlist_path;
     int playlist_manager_playlist_size;
     int playlist_manager_pastlist_size;
+
+#ifdef EMPEG_DSP
+    int min_save_volume;
+    int max_save_volume;
+#endif
 
 #ifdef DEBUG
     char *squash_log_path;
@@ -223,7 +254,7 @@ typedef struct sound_device_s {
     int volume[2];
 } sound_device_t;
 typedef struct sound_format_s {
-/* While these are set, the empeg dsp code will not work
+/* While these are present, the empeg dsp code will not work
  * unless rate is 44100, channels is 2, byte_format is little,
  * and bits is 16.  This will be fixed later. */
     int rate;
@@ -252,9 +283,29 @@ typedef struct song_functions_s {
 } song_functions_t;
 
 /* Playlist Structures */
+typedef struct state_raw_song_s {
+    char *filename;
+    long position;
+} state_raw_song_t;
+
+typedef struct state_info_s {
+    pthread_mutex_t lock;
+    state_raw_song_t *raw_songs;
+    long raw_song_count;
+    long raw_song_alloc;
+    long current_song;
+#ifndef NO_NCURSES
+    int window_states[WIN_COUNT];
+#endif
+    int cur_window_number;
+    int volume;
+    int brightness;
+} state_info_t;
+
 typedef struct song_queue_entry_s {
     struct song_queue_entry_s *next;
     song_info_t *song_info;
+    long start_position;
 } song_queue_entry_t;
 
 typedef struct song_queue_s {
@@ -299,6 +350,7 @@ typedef struct frame_buffer_s {
     int size;
     int pcm_size;
     bool song_eof;
+    bool new_file;
     void *decoder_data;
     frame_data_t(* decoder_function)( void * );
     void(*close_function)( void * );
@@ -338,11 +390,14 @@ typedef struct display_info_s {
 #ifdef EMPEG
     int screen_fd;
     char *screen;
+    enum empeg_screen_e cur_screen;
+    int brightness;
 #endif
 #ifndef NO_NCURSES
     win_info_t window[ WIN_COUNT ];
     int focus;
 #endif
+    bool too_small;
 } display_info_t;
 
 /* Log information */
@@ -393,6 +448,7 @@ status_info_t status_info;
 spectrum_ring_t spectrum_ring;
 spectrum_info_t spectrum_info;
 database_info_t database_info;
+state_info_t state_info;
 
 /* File Extensions to check, values defined at top of global.c */
 extern const db_extension_info_t db_extensions[];
@@ -454,6 +510,9 @@ log_info_t log_info;
 /*
  * Prototypes
  */
+void save_state();
+void load_state_callback( void *data, char *header, char *key, char *value );
+void load_state();
 enum song_type_e get_song_type( const char *base_name, const char *file_name );
 void _squash_error( const char *filename, int line_num, const char *format, ... );
 void _squash_log( const char *filename, int line_num, const char *format, ... );

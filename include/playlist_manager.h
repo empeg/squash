@@ -22,15 +22,11 @@
 #ifndef SQUASH_PLAYLIST_MANAGER_H
 #define SQUASH_PLAYLIST_MANAGER_H
 
-#include <sys/time.h>   /* for gettimeofday() */
-
 /*
  * Prototypes
  */
 void ensure_song_fully_loaded( song_info_t *song_info );
 void *playlist_manager( void *input_data );
-void save_playlist( void );
-void load_playlist( void );
-void playlist_queue_song( song_info_t *song );
+void playlist_queue_song( song_info_t *song, long start_position );
 
 #endif

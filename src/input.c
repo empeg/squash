@@ -21,12 +21,351 @@
  */
 
 #include "global.h"
-#include "display.h"    /* for draw_screen() */
+#include "display.h"    /* for draw_screen() and set_display_info_brightness() */
 #include "player.h"     /* for player_queue_command() */
 #include "database.h"   /* for clear_song_meta() and load_meta_data() */
 #include "stat.h"       /* for feedback() */
-#include "sound.h"      /* for */
+#include "sound.h"      /* for sound_adjust_volume */
 #include "input.h"
+
+#include "sys/time.h"   /* for struct timeval */
+
+/*
+ * This routine is called whenever an event occurs.
+ * An event is defined as a key on the remote being pressed,
+ * a knob being turned.  Or else a key on the panel or the knob
+ * being pressed and released.  Also, a key on the panel or
+ * the knob being held (help set to TRUE).
+ *
+ * The button returned will always be IR*PRESSED and not IR*RELEASED
+ * (for the panel buttons).  Even though it will be a IR*PRESSED event,
+ * the event will only occur after IR*RELEASE has happened.
+ *
+ * The keys on the remote cannot be held so held will never be set
+ * to TRUE for these keys.
+ *
+ * Also, when using the hijack kernel, you cannot have a knob held
+ * event as it is captured (and just a knob event is hard to get).
+ */
+void process_ir_event( long button, bool held ) {
+#ifdef EMPEG
+    bool done;
+
+    done = TRUE;
+    /* These buttons do not depend on the state you are in */
+    switch( button ) {
+        case IR_VOL_MINUS:
+        case IR_KNOB_LEFT:
+            squash_lock( player_info.lock );
+            sound_adjust_volume( player_info.device, -2 );
+            squash_unlock( player_info.lock );
+            squash_broadcast( display_info.changed );
+            break;
+        case IR_VOL_PLUS:
+        case IR_KNOB_RIGHT:
+            squash_lock( player_info.lock );
+            sound_adjust_volume( player_info.device, +2 );
+            squash_unlock( player_info.lock );
+            squash_broadcast( display_info.changed );
+            break;
+        case IR_PROG: /* PLAY/PAUSE */
+            do_toggle_player_command();
+            break;
+        case IR_TRACK_MINUS:
+            do_set_player_command( CMD_STOP );
+            break;
+        case IR_TRACK_PLUS:
+            do_set_player_command( CMD_SKIP );
+            break;
+        default:
+            done = FALSE;
+            break;
+    }
+
+    if( done ) {
+        return;
+    }
+
+    squash_lock( display_info.lock );
+    switch( display_info.cur_screen ) {
+        case EMPEG_SCREEN_PLAY:
+            switch( button ) {
+                case IR_TOP_BUTTON_PRESSED:
+/* top sub menu means top button acts as submenu, otherwise bottom button held acts as submenu */
+#ifdef TOP_SUB_MENU
+                    display_info.cur_screen = EMPEG_SCREEN_PLAY_SUBMENU;
+                    squash_broadcast( display_info.changed );
+#else
+                    do_toggle_player_command();
+#endif
+                    break;
+                case IR_LEFT_BUTTON_PRESSED:
+                    do_set_player_command( CMD_STOP );
+                    break;
+                case IR_RIGHT_BUTTON_PRESSED:
+                    do_set_player_command( CMD_SKIP );
+                    break;
+                case IR_BOTTOM_BUTTON_PRESSED:
+#ifdef TOP_SUB_MENU
+                    display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_1;
+                    squash_broadcast( display_info.changed );
+#else
+                    if( button_held ) {
+                        display_info.cur_screen = EMPEG_SCREEN_PLAY_SUBMENU;
+                        squash_broadcast( display_info.changed );
+                    } else {
+                        display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_1;
+                        squash_broadcast( display_info.changed );
+                    }
+#endif
+                    break;
+                case IR_KNOB_PRESSED:
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case EMPEG_SCREEN_NAVIGATION_1:
+            switch( button ) {
+                case IR_TOP_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_PLAY;
+                    break;
+                case IR_LEFT_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_PLAYLIST;
+                    break;
+                case IR_RIGHT_BUTTON_PRESSED:
+                    //display_info.cur_screen = EMPEG_SCREEN_NONE;
+                    break;
+                case IR_BOTTOM_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_2;
+                    break;
+                case IR_KNOB_PRESSED:
+                    break;
+                default:
+                    break;
+            }
+            squash_broadcast( display_info.changed );
+            break;
+        case EMPEG_SCREEN_NAVIGATION_2:
+            switch( button ) {
+                case IR_TOP_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_QUIT;
+                    do_quit();
+                    break;
+                case IR_LEFT_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_DELETE_MASTERLIST;
+                    if( config.db_masterlist_path ) {
+                        unlink( config.db_masterlist_path );
+                    }
+                    break;
+                case IR_RIGHT_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_SET_DISPLAY_BRIGHTNESS;
+                    break;
+                case IR_BOTTOM_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_1;
+                    break;
+                case IR_KNOB_PRESSED:
+                    break;
+                default:
+                    break;
+            }
+            squash_broadcast( display_info.changed );
+            break;
+        case EMPEG_SCREEN_PLAYLIST:
+            switch( button ) {
+                case IR_TOP_BUTTON_PRESSED:
+#ifdef TOP_SUB_MENU
+                    display_info.cur_screen = EMPEG_SCREEN_PLAYLIST_SUBMENU;
+                    squash_broadcast( display_info.changed );
+#else
+#endif
+                   break;
+                case IR_LEFT_BUTTON_PRESSED:
+                    squash_lock( song_queue.lock );
+                    if( song_queue.selected > 0 ) {
+                        song_queue.selected--;
+                    }
+                    squash_unlock( song_queue.lock );
+                    squash_broadcast( display_info.changed );
+                    break;
+                case IR_RIGHT_BUTTON_PRESSED:
+                    squash_lock( song_queue.lock );
+                    if( song_queue.selected < song_queue.size-1 ) {
+                        song_queue.selected++;
+                    }
+                    squash_unlock( song_queue.lock );
+                    squash_broadcast( display_info.changed );
+                    break;
+                case IR_BOTTOM_BUTTON_PRESSED:
+#ifdef TOP_SUB_MENU
+                    display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_1;
+                    squash_broadcast( display_info.changed );
+#else
+                    if( button_held ) {
+                        display_info.cur_screen = EMPEG_SCREEN_PLAYLIST_SUBMENU;
+                        squash_broadcast( display_info.changed );
+                    } else {
+                        display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_1;
+                        squash_broadcast( display_info.changed );
+                    }
+#endif
+                    break;
+                case IR_KNOB_PRESSED:
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case EMPEG_SCREEN_PLAY_SONG_INFO:
+            switch( button ) {
+                case IR_TOP_BUTTON_PRESSED:
+                case IR_LEFT_BUTTON_PRESSED:
+                case IR_RIGHT_BUTTON_PRESSED:
+                case IR_BOTTOM_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_PLAY;
+                    squash_broadcast( display_info.changed );
+                    break;
+                case IR_KNOB_PRESSED:
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case EMPEG_SCREEN_PLAYLIST_SONG_INFO:
+            switch( button ) {
+                case IR_TOP_BUTTON_PRESSED:
+                case IR_LEFT_BUTTON_PRESSED:
+                case IR_RIGHT_BUTTON_PRESSED:
+                case IR_BOTTOM_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_PLAYLIST;
+                    squash_broadcast( display_info.changed );
+                    break;
+                case IR_KNOB_PRESSED:
+                    break;
+                default:
+                    break;
+            }
+            break;
+        case EMPEG_SCREEN_PLAY_SUBMENU:
+            switch( button ) {
+                case IR_TOP_BUTTON_PRESSED:
+#ifdef TOP_SUB_MENU
+                    do_toggle_player_command();
+                    display_info.cur_screen = EMPEG_SCREEN_PLAY;
+                    squash_broadcast( display_info.changed );
+#else
+                    //display_info.cur_screen = EMPEG_SCREEN_NONE;
+#endif
+                    break;
+                case IR_LEFT_BUTTON_PRESSED:
+                    //display_info.cur_screen = EMPEG_SCREEN_NONE;
+                    break;
+                case IR_RIGHT_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_PLAY_SONG_INFO;
+                    break;
+                case IR_BOTTOM_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_PLAY;
+                    break;
+                case IR_KNOB_PRESSED:
+                    break;
+                default:
+                    break;
+            }
+            squash_broadcast( display_info.changed );
+            break;
+        case EMPEG_SCREEN_PLAYLIST_SUBMENU:
+            switch( button ) {
+                case IR_TOP_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_PLAYLIST;
+                    {
+                        int i;
+                        song_queue_entry_t *queue_entry;
+                        song_queue_entry_t *queue_last_entry;
+
+                        squash_wlock( database_info.lock );
+                        squash_lock( song_queue.lock );
+                        if( song_queue.selected < song_queue.size ) {
+                            queue_entry = song_queue.head;
+                            queue_last_entry = NULL;
+                            for( i = 0; i < song_queue.selected; i++ ) {
+                                queue_last_entry = queue_entry;
+                                queue_entry = queue_entry->next;
+                            }
+                            if( queue_last_entry != NULL ) {
+                                queue_last_entry->next = queue_entry->next;
+                            }
+                            if( queue_entry == song_queue.head ) {
+                                song_queue.head = queue_entry->next;
+                            }
+                            if( queue_entry == song_queue.tail ) {
+                                song_queue.tail = queue_last_entry;
+                            }
+                            feedback( queue_entry->song_info , -1);
+                            squash_free( queue_entry );
+                            song_queue.size--;
+                        }
+                        squash_unlock( song_queue.lock );
+                        squash_wunlock( database_info.lock );
+                        squash_broadcast( song_queue.not_full );
+                        squash_broadcast( display_info.changed );
+                    }
+                    break;
+                case IR_LEFT_BUTTON_PRESSED:
+                    //display_info.cur_screen = EMPEG_SCREEN_NONE;
+                    break;
+                case IR_RIGHT_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_PLAYLIST_SONG_INFO;
+                    squash_broadcast( display_info.changed );
+                    break;
+                case IR_BOTTOM_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_PLAYLIST;
+                    squash_broadcast( display_info.changed );
+                    break;
+                case IR_KNOB_PRESSED:
+                    break;
+                default:
+                    break;
+            }
+            squash_broadcast( display_info.changed );
+            break;
+        case EMPEG_SCREEN_QUIT:
+            break;
+        case EMPEG_SCREEN_DELETE_MASTERLIST:
+            display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_2;
+            squash_broadcast( display_info.changed );
+            break;
+        case EMPEG_SCREEN_SET_DISPLAY_BRIGHTNESS:
+            switch( button ) {
+                case IR_TOP_BUTTON_PRESSED:
+                    break;
+                case IR_LEFT_BUTTON_PRESSED:
+                    if( display_info.brightness >= 5 ) {
+                        display_info.brightness -= 5;
+                    }
+                    set_display_brightness_empeg( display_info.brightness );
+                    break;
+                case IR_RIGHT_BUTTON_PRESSED:
+                    if( display_info.brightness <= 95 ) {
+                        display_info.brightness += 5;
+                    }
+                    set_display_brightness_empeg( display_info.brightness );
+                    break;
+                case IR_BOTTOM_BUTTON_PRESSED:
+                    display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_2;
+                    break;
+                case IR_KNOB_PRESSED:
+                    break;
+                default:
+                    break;
+            }
+            squash_broadcast( display_info.changed );
+            break;
+        case EMPEG_SCREEN_NONE:
+            break;
+    }
+    squash_unlock( display_info.lock );
+#endif
+}
 
 void *ir_monitor( void *input_data ) {
 #ifdef EMPEG
@@ -39,58 +378,99 @@ void *ir_monitor( void *input_data ) {
     }
 
     while( 1 ) {
+        fd_set read_fds;
+        struct timeval select_timeval;
+        struct timeval *select_timeval_pointer = NULL;
+        bool button_held = FALSE;
+
         squash_log("ir loop");
-        result = read(fd, (char *) &button, 4);
-        if( result == -1 ) {
-            squash_error("Error reading buttons");
-        }
-        #ifdef INPUT_DEBUG
-        squash_log( "Got button %x", button );
-        #endif
-        switch( button ) {
+
+        FD_ZERO( &read_fds );
+        FD_SET( fd, &read_fds );
+
+        select_timeval.tv_sec = 0;
+        select_timeval.tv_usec = 500000;
+
+        switch( last_button ) {
             case IR_TOP_BUTTON_PRESSED:
             case IR_RIGHT_BUTTON_PRESSED:
             case IR_LEFT_BUTTON_PRESSED:
             case IR_BOTTOM_BUTTON_PRESSED:
             case IR_KNOB_PRESSED:
-                last_button = button;
-                break;
-            case IR_TOP_BUTTON_RELEASED:
-            case IR_RIGHT_BUTTON_RELEASED:
-            case IR_LEFT_BUTTON_RELEASED:
-            case IR_BOTTOM_BUTTON_RELEASED:
-                if( (button & 0xFFFFFFFE) == last_button ) {
-                    switch( button ) {
-                        case IR_TOP_BUTTON_RELEASED:
-                            do_toggle_player_command();
-                            break;
-                        case IR_BOTTOM_BUTTON_RELEASED:
-                            do_quit();
-                            break;
-                        case IR_LEFT_BUTTON_RELEASED:
-                            do_set_player_command( CMD_STOP );
-                            break;
-                        case IR_RIGHT_BUTTON_RELEASED:
-                            do_set_player_command( CMD_SKIP );
-                            break;
-                        case IR_KNOB_RELEASED:
-                        default:
-                            break;
-                    }
-                }
-                break;
-            case IR_KNOB_LEFT:
-                squash_lock( player_info.lock );
-                sound_adjust_volume( player_info.device, -2 );
-                squash_unlock( player_info.lock );
-                break;
-            case IR_KNOB_RIGHT:
-                squash_lock( player_info.lock );
-                sound_adjust_volume( player_info.device, +2 );
-                squash_unlock( player_info.lock );
+                /*
+                 * we are in a state where a button has been pressed, and that
+                 * button may be held down.  so we only want to start a timeout
+                 * of select_timeval seconds.  If we do not get a release event
+                 * by then, that means the button is held down.
+                 * to wait at most the select_timeval amount for a release event.
+                 * if we timeout waiting for one, then that means we have a key
+                 * held event (instead of a key press)
+                 */
+                select_timeval_pointer = &select_timeval;
                 break;
             default:
+                /*
+                 * otherwise we aren't in a state where the button may be held down,
+                 * then we can have our select wait indefinately.
+                 */
+                select_timeval_pointer = NULL;
                 break;
+        }
+
+        button = -1;
+        result = select( fd+1, &read_fds, NULL, NULL, select_timeval_pointer );
+        if( result == 0 ) {
+            /*
+             * We timed out, we should only timeout if the last button was a holdable
+             * button, but let's check just in case
+             */
+            if( select_timeval_pointer ) {
+                button_held = TRUE;
+                button = last_button;
+                #ifdef INPUT_DEBUG
+                squash_log( "Got (held) button %x", button );
+                #endif
+                last_button = -1;
+            }
+        } else if ( result < 0 ) {
+            squash_error("Error calling select() in button loop");
+        } else {
+            result = read(fd, (char *) &button, 4);
+            if( result == -1 ) {
+                squash_error("Error reading buttons");
+            }
+            button_held = FALSE;
+            #ifdef INPUT_DEBUG
+            squash_log( "Got button %x", button );
+            #endif
+            switch( button ) {
+                case IR_TOP_BUTTON_PRESSED:
+                case IR_RIGHT_BUTTON_PRESSED:
+                case IR_LEFT_BUTTON_PRESSED:
+                case IR_BOTTOM_BUTTON_PRESSED:
+                case IR_KNOB_PRESSED:
+                    last_button = button;
+                    button = -1;
+                    break;
+                case IR_TOP_BUTTON_RELEASED:
+                case IR_RIGHT_BUTTON_RELEASED:
+                case IR_LEFT_BUTTON_RELEASED:
+                case IR_BOTTOM_BUTTON_RELEASED:
+                    if( last_button == (button & 0xFFFFFFFE) ) {
+                        button = last_button;
+                    } else {
+                        button = -1;
+                    }
+                    last_button = -1;
+                    break;
+                default:
+                    button = button;
+                    last_button = -1;
+            }
+        }
+
+        if( button != -1 ) {
+            process_ir_event( button, button_held );
         }
     }
 #endif

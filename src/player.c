@@ -47,19 +47,32 @@ void *frame_decoder( void *input_data ) {
     bool have_new_frame = FALSE;
 
     while( 1 ) {
-        squash_lock( frame_buffer.lock );
-
-        if( frame_buffer.song_eof && close_function ) {
-            close_function( decoder_data );
+        /* decode some data */
+        if( decoder_function ) {
+            new_frame = decoder_function( decoder_data );
+            have_new_frame = TRUE;
         }
 
-        while( frame_buffer.song_eof || frame_buffer.size >= PLAYER_MAX_BUFFER_SIZE || frame_buffer.pcm_size >= PLAYER_MAX_BUFFER_PCM_SIZE ) {
-            squash_wait( frame_buffer.restart, frame_buffer.lock );
+        squash_lock( frame_buffer.lock );
+
+        if( frame_buffer.song_eof ) {
+            if( close_function ) {
+                close_function( decoder_data );
+                close_function = NULL;
+                decoder_function = NULL;
+                frame_buffer.song_eof = FALSE;
+            }
         }
 
         if( have_new_frame ) {
+            have_new_frame = FALSE;
             if( new_frame.pcm_size == 0 || new_frame.pcm_size <= -2 ) {
-                frame_buffer.song_eof = TRUE;
+                if( close_function ) {
+                    close_function( decoder_data );
+                    close_function = NULL;
+                    decoder_function = NULL;
+                    frame_buffer.song_eof = FALSE;
+                }
             } else {
                 frame_buffer.pcm_size += new_frame.pcm_size;
             }
@@ -72,24 +85,21 @@ void *frame_decoder( void *input_data ) {
                 memcpy(frame_buffer.frames[frame_buffer.size].pcm_data, new_frame.pcm_data, new_frame.pcm_size);
             }
             frame_buffer.size++;
-            have_new_frame = FALSE;
-            if( frame_buffer.song_eof ) {
-                squash_unlock( frame_buffer.lock );
-                continue;
-            }
         }
 
-        decoder_data = frame_buffer.decoder_data;
-        decoder_function = frame_buffer.decoder_function;
-        close_function = frame_buffer.close_function;
-
-        squash_unlock( frame_buffer.lock );
-
-        /* decode some data */
-        if( decoder_function ) {
-            new_frame = decoder_function( decoder_data );
-            have_new_frame = TRUE;
+        if( frame_buffer.new_file ) {
+            frame_buffer.new_file = FALSE;
+            decoder_data = frame_buffer.decoder_data;
+            decoder_function = frame_buffer.decoder_function;
+            close_function = frame_buffer.close_function;
         }
+
+        while( !(frame_buffer.size < PLAYER_MAX_BUFFER_SIZE && frame_buffer.pcm_size < PLAYER_MAX_BUFFER_PCM_SIZE
+                    && (decoder_function || frame_buffer.new_file)) ) {
+            squash_wait( frame_buffer.restart, frame_buffer.lock );
+        }
+
+       squash_unlock( frame_buffer.lock );
     }
 
     return (void *)NULL;
@@ -106,9 +116,7 @@ void *player( void *input_data ) {
     enum { STATE_BEFORE_SONG, STATE_IN_SONG, STATE_AFTER_SONG } play_state;
     player_command_entry_t *command_entry;
     char *full_filename;
-
-    /* Initialize the audio device */
-    sound_init();
+    long start_position;
 
     play_state = STATE_BEFORE_SONG;
 
@@ -135,20 +143,36 @@ void *player( void *input_data ) {
                         /* Add this and the player will operate more like
                          * a regular CD player:
                         player_info.state = STATE_PLAY;
-                        */
+                         */
+                        {
+                            int x;
+                            for( x = 0; x < frame_buffer.size; x++ ) {
+                                squash_free( frame_buffer.frames[x].pcm_data );
+                            }
+                        }
                         frame_buffer.song_eof = TRUE;
+                        frame_buffer.size = 0;
+                        frame_buffer.pcm_size = 0;
+
                         if( play_state == STATE_IN_SONG ) {
                             play_state = STATE_AFTER_SONG;
                         }
                         feedback(cur_song, -1);
                         break;
                     case CMD_STOP:
+                        {
+                            int x;
+                            for( x = 0; x < frame_buffer.size; x++ ) {
+                                squash_free( frame_buffer.frames[x].pcm_data );
+                            }
+                        }
                         player_info.state = STATE_STOP;
-                        frame_buffer.song_eof = TRUE;
+                        frame_buffer.size = 0;
+                        frame_buffer.pcm_size = 0;
 
                         if( play_state == STATE_IN_SONG ) {
                             /* Return to the begenning of the song */
-                            song_functions[ cur_song->song_type ].seek( frame_buffer.decoder_data, 0, 0 );
+                            song_functions[ cur_song->song_type ].seek( frame_buffer.decoder_data, 0, cur_song->play_length );
                             player_info.current_position = 0;
 
                             /* Reset the spectrum display */
@@ -212,7 +236,10 @@ void *player( void *input_data ) {
                 }
 
                 /* Get the next song */
-                cur_song = get_next_song_info();
+                get_next_song_info(&cur_song, &start_position);
+
+                /* Set Now Playing Information */
+                set_now_playing_info( cur_song, start_position );
 
                 squash_log("Playing: %s", cur_song->filename);
 
@@ -225,11 +252,19 @@ void *player( void *input_data ) {
 
                 /* Open the decoder  */
                 squash_asprintf(full_filename, "%s/%s", cur_song->basename[ BASENAME_SONG ], cur_song->filename );
+
                 frame_buffer.decoder_data = song_functions[ cur_song->song_type ].open( full_filename, &sound_format );
                 if( frame_buffer.decoder_data == NULL ) {
                     squash_error("Problem opening song file %s", full_filename);
                 }
+                squash_free( full_filename );
+
+                /* skip to the start position */
+                song_functions[ cur_song->song_type ].seek( frame_buffer.decoder_data, start_position, cur_song->play_length );
+
                 frame_buffer.decoder_function = song_functions[ cur_song->song_type ].decode_frame;
+                frame_buffer.close_function = song_functions[ cur_song->song_type ].close;
+                frame_buffer.new_file = TRUE;
                 {
                     int x;
                     for( x = 0; x < frame_buffer.size; x++ ) {
@@ -238,9 +273,9 @@ void *player( void *input_data ) {
                 }
                 frame_buffer.size = 0;
                 frame_buffer.pcm_size = 0;
-                frame_buffer.song_eof = FALSE;
                 squash_broadcast( frame_buffer.restart );
                 squash_unlock( frame_buffer.lock );
+                squash_runlock( database_info.lock );
 
                 silence_duration = 0;
 
@@ -250,22 +285,17 @@ void *player( void *input_data ) {
                     squash_error("Problem opening the sound device!");
                 }
 
-                /* Set Now Playing Information */
-                set_now_playing_info( cur_song );
-
-                /* skip to near the end of the song... debug line: */
-                /* song_functions[cur_song_type].seek(cur_decoder_data, cur_song_duration - 1000*5); */
+                squash_unlock( player_info.lock );
 
                 /* Reset the spectrum for the new song */
                 spectrum_reset( sound_format );
 
                 play_state = STATE_IN_SONG;
-                squash_runlock( database_info.lock );
-                squash_unlock( player_info.lock );
                 break;
             case STATE_IN_SONG:
                 squash_lock(frame_buffer.lock);
                 if( frame_buffer.size > 0 ) {
+                    bool need_more = FALSE;
                     frame_data_t cur_frame;
                     int x;
                     cur_frame = frame_buffer.frames[0];
@@ -274,6 +304,9 @@ void *player( void *input_data ) {
                     }
                     frame_buffer.size--;
                     frame_buffer.pcm_size -= cur_frame.pcm_size;
+                    if( frame_buffer.size * 10 < PLAYER_MAX_BUFFER_SIZE * 9 || frame_buffer.pcm_size * 10 < PLAYER_MAX_BUFFER_PCM_SIZE * 9 ) {
+                        need_more = TRUE;
+                    }
                     squash_unlock( frame_buffer.lock );
 
                     if( cur_frame.pcm_size == 0 ) {
@@ -291,15 +324,14 @@ void *player( void *input_data ) {
                         play_state = STATE_AFTER_SONG;
                         /* Non-recoverable error */
                     } else {
-
                         spectrum_update( cur_frame );
 
                         squash_lock( player_info.lock );
-                        player_info.current_position = cur_frame.position;
                         /* Signal display, if we haven't updated for a whole second */
                         if( cur_frame.position / 1000 != player_info.current_position / 1000 ) {
                             squash_broadcast( display_info.changed );
                         }
+                        player_info.current_position = cur_frame.position;
                         squash_unlock( player_info.lock );
 
                         cur_sound_device = player_info.device;  /* grab a copy of the device
@@ -310,7 +342,9 @@ void *player( void *input_data ) {
                         }
                         squash_free( cur_frame.pcm_data );
                     }
-                    squash_broadcast( frame_buffer.restart );
+                    if( need_more ) {
+                        squash_broadcast( frame_buffer.restart );
+                    }
                 } else {
                     squash_broadcast( frame_buffer.restart );
                     squash_wait( frame_buffer.new_data, frame_buffer.lock );
@@ -329,15 +363,10 @@ void *player( void *input_data ) {
                 sound_close( player_info.device );
                 squash_unlock( player_info.lock );
 
-                squash_free( full_filename );
-
                 play_state = STATE_BEFORE_SONG;
                 break;
         }
     }
-
-    /* Shutdown the sound device */
-    sound_shutdown();
 
     return 0;
 }
@@ -345,12 +374,13 @@ void *player( void *input_data ) {
 /*
  * Gets the next song off the playlist.
  */
-song_info_t *get_next_song_info( void ) {
+void get_next_song_info( song_info_t **song, long *start_position ) {
     song_queue_entry_t *cur_song_queue_entry;
-    song_info_t *next_song;
 
     if( song_queue.size <= 0 ) {
-        return NULL;
+        *song = NULL;
+        *start_position = 0;
+        return;
     }
 
     /* Get a entry from the queue */
@@ -367,11 +397,11 @@ song_info_t *get_next_song_info( void ) {
     squash_broadcast( song_queue.not_full );
 
     /* Get the song information */
-    next_song = cur_song_queue_entry->song_info;
+    *song = cur_song_queue_entry->song_info;
+    *start_position = cur_song_queue_entry->start_position;
     squash_free( cur_song_queue_entry );
 
-    /* Return the information */
-    return next_song;
+    /* Set the return information */
 }
 
 /*
@@ -457,10 +487,10 @@ int detect_silence( frame_data_t frame_data, unsigned int *silence_duration ) {
 /*
  * Informs display.c about the now_playing window.
  */
-void set_now_playing_info( song_info_t *song ) {
+void set_now_playing_info( song_info_t *song, long start_position ) {
     /* Set song */
     player_info.song = song;
-    player_info.current_position = 0;
+    player_info.current_position = start_position;
 
     /* Signal anybody interested in status */
     squash_broadcast( display_info.changed );

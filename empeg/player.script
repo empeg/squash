@@ -10,7 +10,9 @@ source /empeg/var/config.ini
 # run the original player
 # /empeg/bin/player
 
-rwm
+#rwm
+mount -n -o remount,rw,noatime /drive0
+
 # run the dhcpcd client only if we are at home
 if grep "0 (AC Power)" /proc/empeg_power > /dev/null ; then \
         # try to kill any existing dhcpcd's

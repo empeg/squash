@@ -41,54 +41,50 @@ void *setup_database( void *data ) {
     /* Grab our locks */
     squash_lock( display_info.lock );
     squash_wlock( database_info.lock );
-    squash_lock( song_queue.lock );
-    squash_lock( player_info.lock );
 
     /* Load the database */
     load_db_filenames();
 
-    /* Unlock the locks we don't need anymore */
-    squash_unlock( player_info.lock );
-    squash_unlock( song_queue.lock );
-
-    /* Hide the info window, and unhide the spectrum analyzer */
-#ifndef NO_NCURSES
-    display_info.window[ WIN_INFO ].state = WIN_STATE_HIDDEN;
-    display_info.window[ WIN_SPECTRUM ].state = WIN_STATE_NORMAL;
-#endif
-
     /* Tell the rest of the system we are done loading the file list */
     display_info.state = SYSTEM_RUNNING;
 
+    /* Release our locks */
+    squash_wunlock( database_info.lock );
+    squash_unlock( display_info.lock );
+
+    squash_log("starting spectrum");
     /* Tell the specturm analyzer it can run */
     squash_lock( spectrum_ring.lock );
     spectrum_ring.active = TRUE;
     squash_unlock( spectrum_ring.lock );
 
-    /* Update the screen */
-    squash_wunlock( database_info.lock );
-    draw_screen();
-
-    /* Release the database lock */
-    squash_unlock( display_info.lock );
-
+    squash_log("starting player");
     /* Tell the player to start playing */
     squash_lock( player_command.lock );
     player_queue_command( CMD_PLAY );
     squash_signal( player_command.changed );
     squash_unlock( player_command.lock );
 
+    squash_log("loading state");
+    /* Load any previous playing song */
+    load_state();
+
+    squash_log("drawing screen");
+    draw_screen();
+
+    squash_log("starting playlist manager");
     /* Tell the playlist_manager() thread to add songs */
     squash_lock( song_queue.lock );
     song_queue.wanted_size = config.playlist_manager_playlist_size;
     squash_signal( song_queue.not_full );
     squash_unlock( song_queue.lock );
 
+    squash_log("loading stats");
     load_all_meta_data( TYPE_STAT ); /* Load statistics */
     /* Load the statistics routine (needed for playlist_manager() to call pick_song()) */
     start_song_picker();
     squash_signal( database_info.stats_finished );
-    squash_log("stats loaded");
+    squash_log("stats loaded, database thread ending");
 
     /* This isn't necessary anymore, since we load metadata on playlist load instead.
      * (Will be needed again once searching has been added). */
@@ -584,7 +580,10 @@ void load_meta_data( song_info_t *song, enum meta_type_e which ) {
  */
 void load_all_meta_data( enum meta_type_e which ) {
     int i;
+    squash_log("loading %d (write lock for database will oscillate)", which);
+    squash_rlock( database_info.lock );
     for( i = 0; i < database_info.song_count; i++ ) {
+        squash_runlock( database_info.lock );
         squash_wlock( database_info.lock );
         /* If the type is meta, we need to be careful, and not load this song a second time  */
         if( which == TYPE_META && database_info.songs[i].meta_key_count != -1 ) {
@@ -592,8 +591,14 @@ void load_all_meta_data( enum meta_type_e which ) {
             continue;
         }
         load_meta_data( &database_info.songs[i], which );
+        if( i % 500 == 0 ) {
+            squash_log("%d of %d load complete", i, database_info.song_count);
+        }
         squash_wunlock( database_info.lock );
+        sched_yield();
+        squash_rlock( database_info.lock );
     }
+    squash_runlock( database_info.lock );
 }
 
 

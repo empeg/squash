@@ -22,7 +22,7 @@
 #ifndef SQUASH_PLAYER_H
 #define SQUASH_PLAYER_H
 
-#define PLAYER_MAX_BUFFER_SIZE 128
+#define PLAYER_MAX_BUFFER_SIZE 32
 #define PLAYER_MAX_BUFFER_PCM_SIZE (128*1024)
 
 /*
@@ -35,10 +35,10 @@ extern song_functions_t song_functions[];
  */
 void *frame_decoder( void *input_data );
 void *player( void *input_data );
-song_info_t *get_next_song_info( void );
+void get_next_song_info( song_info_t **song, long *start_position );
 void done_with_song_info( song_info_t *song );
 int detect_silence( frame_data_t frame_data, unsigned int *silence_duration );
-void set_now_playing_info( song_info_t *song );
+void set_now_playing_info( song_info_t *song, long start_position );
 double *get_spectrum(char *pcm_data, int pcm_length);
 void player_queue_command( enum player_command_e command );
 #endif

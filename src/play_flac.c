@@ -262,7 +262,9 @@ long flac_calc_duration( void *data ) {
  * the opened song
  */
 void flac_seek( void *data, long seek_time, long duration ) {
-    /* not done yet */
+    flac_data_t *flac_data = (flac_data_t *)data;
+
+    FLAC__file_decoder_seek_absolute( flac_data->decoder, seek_time * (flac_data->sample_rate / 1000) );
     return;
 }
 
