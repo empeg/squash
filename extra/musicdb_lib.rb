@@ -61,7 +61,7 @@ end
 $id3v2_to_db = {
 
 # Identification frames
-#"TIT1"=>"music_group",
+"TIT1"=>"music_group",
 "TIT2"=>"title",
 "TIT3"=>"song_mix",
 "TALB"=>"album",
@@ -82,6 +82,7 @@ $id3v2_to_db = {
 "TCOM"=>"artist_composer",
 #"TMCL"=>"musicians", # this one is too weird
 #"TENC"=>"file_creator",
+"TYER"=>"year",
 
 # Derived and subjective properties
 "TBPM"=>"bpm",

@@ -153,7 +153,11 @@ void spectrum_init( void ) {
     spectrum_info.cap_heights = NULL;
     spectrum_info.bar_heights = NULL;
 
+#ifdef NO_FFTW
+    spectrum_info.plan = NULL;
+#else
     spectrum_info.plan = fftw_create_plan(SPECTRUM_WINDOW_SIZE, FFTW_FORWARD, FFTW_ESTIMATE);
+#endif
 
     spectrum_ring.active = FALSE;
     spectrum_ring.head = 0;
@@ -172,7 +176,10 @@ void spectrum_init( void ) {
  */
 void spectrum_deinit( void ) {
     squash_free(spectrum_ring.ring);
+#ifdef NO_FFTW
+#else
     fftw_destroy_plan(spectrum_info.plan);
+#endif
     squash_free(spectrum_info.out);
     squash_free(spectrum_info.in);
     squash_free(spectrum_info.bitmap);
@@ -317,7 +324,10 @@ void spectrum_render( void ) {
     int i, j, x, cur_height, y, max_spectrum, power_count;
     double avg_power;
 
+#ifdef NO_FFTW
+#else
     fftw_one(spectrum_info.plan, spectrum_info.in, spectrum_info.out);
+#endif
 
     height = spectrum_info.height;
     width = spectrum_info.width;

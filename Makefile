@@ -9,9 +9,27 @@
 CC		:= gcc
 CFLAGS	:= -O3 -std=gnu99 -pedantic -Wall
 INCLUDE	:= -Iinclude
-LDFLAGS := -lvorbis -lao -ldl -lmad -lncurses -lfftw -lpthread -lm
+LDFLAGS := -lvorbis -lao -ldl -lmad -lncurses -lpthread -lm
+
+ifdef NO_FFTW
+	CFLAGS := -DNO_FFTW $(CFLAGS)
+else
+	LDFLAGS := -lfftw $(LDFLAGS)
+endif
+
+ifdef NO_VORBIS_COMMENT
+	CFLAGS := -DNO_VORBIS_COMMENT $(CFLAGS)
+else
+endif
+
+ifdef NO_ID3LIB
+	CFLAGS := -DNO_ID3LIB $(CFLAGS)
+else
+	LDFLAGS := -lz -lid3 -lstdc++ $(LDFLAGS)
+endif
 
 ifdef TREMOR
+	CFLAGS := -DTREMOR $(CFLAGS)
 	LDFLAGS := -lvorbisidec $(LDFLAGS)
 else
 	LDFLAGS := -lvorbisfile $(LDFLAGS)

@@ -63,6 +63,8 @@ void *ogg_open( char *filename, sound_format_t *sound_format ) {
  * Set a song's metadata based on vorbis comments,
  */
 void ogg_load_meta( void *data, char *filename ) {
+#ifdef NO_VORBIS_COMMENT
+#else
     OggVorbis_File ogg_file;
     vorbis_comment *comment;
     FILE *file;
@@ -75,7 +77,7 @@ void ogg_load_meta( void *data, char *filename ) {
     }
 
     /* Open the vorbis file */
-    if( ov_open(file, &ogg_file, NULL, 0) != 0 ) {
+    if( ov_test(file, &ogg_file, NULL, 0) != 0 ) {
         fclose( file );
         return;
     }
@@ -99,6 +101,7 @@ void ogg_load_meta( void *data, char *filename ) {
     }
 
     ov_clear( &ogg_file );
+#endif
 }
 
 /*

@@ -21,6 +21,7 @@
  */
 
 #include "global.h"
+#include "database.h" /* for insert_meta_data() */
 #include "play_mp3.h"
 
 /*
@@ -84,11 +85,138 @@ void *mp3_open( char *filename, sound_format_t *sound_format ) {
     return (void *)mp3_data;
 }
 
+#ifdef NO_ID3LIB
+#else
+/* All of this mess is needed for mp3_load_meta().  The mess will go away
+ * once the id3lib C API is fleshed out some more.  Most of this is copied
+ * from the source of id3lib with some additions, removals and modifications
+ */
+enum field_type_e { ID3FD_GeneralText, ID3FD_Text, ID3FD_UserText, ID3FD_URL, ID3FD_UserURL, ID3FD_SyncLyrics };
+
+struct fid_to_db_s {
+    int fid;
+    char *short_name;
+    char *long_name;
+    bool foo;
+    bool bar;
+    enum field_type_e field_type;
+    char *description;
+    char *db_name;
+};
+
+/* copied and modified from id3lib/src/field.cpp because they don't have the C API complete.
+ * Only uses the first and last field.  The others are from field.cpp. */
+struct fid_to_db_s fid_to_db[] = {
+  //                          short  long   tag    file
+  // frame id                 id     id     discrd discrd field defs           description
+  {ID3FID_COMMENT,           "COM", "COMM", false, false, ID3FD_GeneralText,   "Comments", "comment"},
+  {ID3FID_SYNCEDLYRICS,      "SLT", "SYLT", false, false, ID3FD_SyncLyrics,    "Synchronized lyric/text", "lyrics_syncronized"},
+  {ID3FID_ALBUM,             "TAL", "TALB", false, false, ID3FD_Text,          "Album/Movie/Show title", "album"},
+  {ID3FID_BPM,               "TBP", "TBPM", false, false, ID3FD_Text,          "BPM (beats per minute)", "bpm"},
+  {ID3FID_COMPOSER,          "TCM", "TCOM", false, false, ID3FD_Text,          "Composer", "artist_composer"},
+  {ID3FID_CONTENTTYPE,       "TCO", "TCON", false, false, ID3FD_Text,          "Content type", "genre"},
+  {ID3FID_DATE,              "TDA", "TDAT", false, false, ID3FD_Text,          "Date", ""},
+  {ID3FID_LYRICIST,          "TXT", "TEXT", false, false, ID3FD_Text,          "Lyricist/Text writer", "artist_lyrics"},
+  {ID3FID_FILETYPE,          "TFT", "TFLT", false, false, ID3FD_Text,          "File type", "file_type"},
+  {ID3FID_CONTENTGROUP,      "TT1", "TIT1", false, false, ID3FD_Text,          "Title/songname/content description", "music_group"},
+  {ID3FID_TITLE,             "TT2", "TIT2", false, false, ID3FD_Text,          "Title/songname/content description", "title"},
+  {ID3FID_SUBTITLE,          "TT3", "TIT3", false, false, ID3FD_Text,          "Subtitle/Description refinement", "song_mix"},
+  {ID3FID_LANGUAGE,          "TLA", "TLAN", false, false, ID3FD_Text,          "Language(s)", "language"},
+  {ID3FID_SONGLEN,           "TLE", "TLEN", false, true,  ID3FD_Text,          "Length", "length"},
+  {ID3FID_MEDIATYPE,         "TMT", "TMED", false, false, ID3FD_Text,          "Media type", "original_media"},
+  {ID3FID_ORIGALBUM,         "TOT", "TOAL", false, false, ID3FD_Text,          "Original album/movie/show title", "album_original"},
+  {ID3FID_ORIGLYRICIST,      "TOL", "TOLY", false, false, ID3FD_Text,          "Original lyricist(s)/text writer(s)", "artist_lyrics_original"},
+  {ID3FID_ORIGARTIST,        "TOA", "TOPE", false, false, ID3FD_Text,          "Original artist(s)/performer(s)", "artist_original"},
+  {ID3FID_LEADARTIST,        "TP1", "TPE1", false, false, ID3FD_Text,          "Lead performer(s)/Soloist(s)", "artist"},
+  {ID3FID_BAND,              "TP2", "TPE2", false, false, ID3FD_Text,          "Band/orchestra/accompaniment", "artist_extra"},
+  {ID3FID_CONDUCTOR,         "TP3", "TPE3", false, false, ID3FD_Text,          "Conductor/performer refinement", "artist_conductor"},
+  {ID3FID_MIXARTIST,         "TP4", "TPE4", false, false, ID3FD_Text,          "Interpreted, remixed, or otherwise modified by", "artist_remix"},
+  {ID3FID_PARTINSET,         "TPA", "TPOS", false, false, ID3FD_Text,          "Part of a set", "disc"},
+  {ID3FID_TRACKNUM,          "TRK", "TRCK", false, false, ID3FD_Text,          "Track number/Position in set", "tracknumber"},
+  {ID3FID_ISRC,              "TRC", "TSRC", false, false, ID3FD_Text,          "ISRC (international standard recording code)", "isrc"},
+  {ID3FID_USERTEXT,          "TXX", "TXXX", false, false, ID3FD_UserText,      "User defined text information", "user_text"},
+  {ID3FID_YEAR,              "TYE", "TYER", false, false, ID3FD_Text,          "Year", "year"},
+  {ID3FID_UNSYNCEDLYRICS,    "ULT", "USLT", false, false, ID3FD_GeneralText,   "Unsynchronized lyric/text transcription", "lyrics"},
+};
+int fid_to_db_length = sizeof(fid_to_db) / sizeof(fid_to_db[0]);
+#endif
+
 /*
  * Set a song's metadata based on id3v2 tag,
  */
 void mp3_load_meta( void *data, char *filename ) {
-    /* TODO: do this */
+#ifdef NO_ID3LIB
+#else
+    ID3Tag *tag;
+    ID3TagIterator *iterator;
+    ID3Frame *frame;
+    ID3Field *field;
+    ID3_FrameID frame_id;
+
+    int i, value_length;
+    char *key, *value_raw, *cur_value, *cur_ptr;
+
+    /* open the mp3 file and setup reading the id3 tag */
+    tag = ID3Tag_New();
+    ID3Tag_Link( tag, filename );
+    iterator = ID3Tag_CreateIterator( tag );
+
+    /* for each frame (artist, title, etc. */
+    while( (frame = ID3TagIterator_GetNext( iterator )) != NULL ) {
+        frame_id = ID3Frame_GetID( frame );
+
+        /* find what frame_id represents */
+        key = NULL;
+        if( frame_id == ID3FID_NOFRAME || frame_id == ID3FID_PRIVATE ) {
+            /* this is an unreadable frame by the id3lib library */
+            continue;
+        }
+        for( i = 0; i < fid_to_db_length; i++ ) {
+            if( fid_to_db[i].fid == frame_id ) {
+                key = fid_to_db[i].db_name;
+                break;
+            }
+        }
+        if(key == NULL) {
+            /* unknown frame, probably just one we can't do anything with
+             * (like a picture)
+             */
+            continue;
+        }
+
+        /* get the text portion of this frame */
+        field = ID3Frame_GetField( frame, ID3FN_TEXT );
+        value_length = ID3Field_Size( field );
+
+        squash_calloc( value_raw, value_length + 1, 1 );
+        ID3Field_GetASCII( field, value_raw, value_length );
+
+        /* now parse out any lines that might have gotten embedded */
+        cur_ptr = value_raw;
+        do {
+            cur_value = cur_ptr;
+            /* there -shouldn't- be anything other than \n but that doesn't mean
+             * fools won't add them */
+            cur_ptr = strpbrk( cur_value, "\n\r" );
+            if( cur_ptr != NULL ) {
+                while( cur_ptr - value_raw < value_length && (*cur_ptr == '\n' || *cur_ptr == '\r') ) {
+                    *cur_ptr = '\0';
+                    cur_ptr++;
+                }
+            }
+
+            /* ok now add the key and value (need to make copies) */
+            insert_meta_data( data, NULL, strdup(key), strdup( cur_value ) );
+        } while ( cur_ptr != NULL && cur_ptr - value_raw < value_length );
+
+        /* free up the data we got from the library */
+        squash_free( value_raw );
+    }
+
+    /* free up the libraries data structures */
+    ID3TagIterator_Delete( iterator );
+    ID3Tag_Delete( tag );
+#endif
 }
 
 /*
