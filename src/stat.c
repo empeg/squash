@@ -123,8 +123,8 @@ unsigned int pick_song() {
     unsigned int canidate;
     double canidate_rating;
 
-    /* This is a random pick.  It sucks.
-    return (int)((double)database_info.song_count * rand() / (RAND_MAX + 1.0)); */
+    /* This is a random pick.  It sucks. */
+    /* return (int)((double)database_info.song_count * rand() / (RAND_MAX + 1.0)); */
 
     avg = database_info.sum / database_info.song_count;
     std_dev = sqrt( fabs(database_info.sqr_sum / database_info.song_count - avg*avg) );

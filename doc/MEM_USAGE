@@ -1,15 +1,15 @@
-squash attempts to be resonable in it's memory consumtion.  And
-although it does load all every song into memory, it still manages
-to have low memory usage.
+squash attempts to be resonable in it's memory consumtion.  And although
+it does load all every song into memory, it still manages to have low
+memory usage.
 
-squash has about a 2 megabyte footprint, that's the size with no
-songs loaded.
+squash has about a 2 megabyte footprint, that's the size with no songs
+loaded.
 
-Approximately 1 to 1.25 kilobytes are used to load each song.  The
-actual malloc'd amount is closer to 300 bytes.  The difference
-between these two numbers is explained by the extra memory slack
-each malloc call provides (e.g. Linux's implementation of malloc
-only allocates powers of two, i.e. 32, 64, 128 bytes, etc.).
+Approximately 1 to 1.25 kilobytes are used to load each song.  The actual
+malloc'd amount is closer to 300 bytes.  The difference between these two
+numbers is explained by the extra memory slack each malloc call provides
+(e.g. Linux's implementation of malloc only allocates powers of two,
+i.e. 32, 64, 128 bytes, etc.).
 
 The breakdown of current usage:
 
@@ -29,6 +29,6 @@ values[]            4           1x          4       N*7          28*N
 * the multiplier for indices' value applies to itself, instead of the
 line below it.
 
-So on average we will expect 301 bytes memory usage per song.  Of
-course, malloc slack adds considerably to this value.
+So on average we will expect 301 bytes memory usage per song.  Of course,
+malloc slack adds considerably to this value.
 

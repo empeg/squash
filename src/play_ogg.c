@@ -50,10 +50,10 @@ void *ogg_open( char *filename, sound_format_t *sound_format ) {
     }
 
     vorbis_info = ov_info(&ogg_data->file, -1);
-    sound_format->channels = vorbis_info->channels;
     sound_format->rate = vorbis_info->rate;
+    sound_format->channels = vorbis_info->channels;
     sound_format->bits = 16;
-    sound_format->byte_format = AO_FMT_LITTLE;
+    sound_format->byte_format = SOUND_LITTLE;
 
     /* Return data */
     return (void *)ogg_data;

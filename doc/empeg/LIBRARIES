@@ -1,0 +1,28 @@
+This document describes how to install the libraries needed to get squash
+running on an empeg.
+
+I choose to install the libraries by hand.  The libraries needed are:
+libmad, tremor (libivorbisdec).  You can get the libraries needed at
+these urls:
+
+ftp://ftp.mars.org/pub/mpeg/libmad-0.15.0b.tar.gz
+http://www.xiph.org/ogg/vorbis/download/tremor_cvs_snapshot.tgz
+
+For libmad use (and then make && make install):
+./configure --build=i686-linux-gnu --host=arm-linux --prefix=/usr/local/i686-linux-gnu --enable-static --disable-shared
+
+For tremor (libivorbisdec) use (and then make && make install):
+./autogen.sh --build=i686-linux-gnu --host=arm-linux --prefix=/usr/local/i686-linux-gnu --enable-static --disable-shared
+
+I have not tried to install libncurses or libfftw.  If you would like
+to try this, you may reenable these features in the Makefile (it's
+near the top by ifdef EMPEG).
+
+If you do compile ncurses, you would have the empeg display, the control
+fifo -and- the ncurses display all running at once!
+
+If you compile the fftw library, you will have the spectrum analyzer
+running on the ncurses interface only (as of now).  Also, the StrongARM
+may not be able to handle the floating point calculations that the fftw
+library will try to do.
+

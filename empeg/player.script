@@ -1,0 +1,27 @@
+#!/bin/sh
+
+# This is needed to trick hijack into starting up
+# the ftp servers.  Please note by running the
+# original player in a shell script like this, you
+# will not have the @home @work feature of the
+# hijack kernel.
+source /empeg/var/config.ini
+
+# run the original player
+# /empeg/bin/player
+
+rwm
+# run the dhcpcd client only if we are at home
+if grep "0 (AC Power)" /proc/empeg_power > /dev/null ; then \
+        # try to kill any existing dhcpcd's
+        [ -e /var/run/dhcpcd-eth0.pid ] && kill `cat /var/run/dhcpcd-eth0.pid`
+        rm /var/run/dhcpcd-eth0.pid
+        # run dhcpcd
+        /bin/dhcpcd -h orpheus &
+fi
+
+# run squash
+/drive0/squash/squash
+
+rom
+

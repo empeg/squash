@@ -25,6 +25,10 @@
 #include "display.h"    /* for draw_info() and draw_screen() */
 #include "play_ogg.h"   /* for ogg_load_meta() */
 #include "play_mp3.h"   /* for mp3_load_meta() */
+#ifdef EMPEG
+#include "vfdlib.h"     /* for vfdlib_*() */
+#include "version.h"    /* for SQUASH_VERSION */
+#endif
 #include "database.h"
 
 /*
@@ -47,8 +51,12 @@ void *setup_database( void *data ) {
     squash_unlock( song_queue.lock );
 
     /* Hide the info window, and unhide the spectrum analyzer */
+#ifndef NO_NCURSES
     display_info.window[ WIN_INFO ].state = WIN_STATE_HIDDEN;
     display_info.window[ WIN_SPECTRUM ].state = WIN_STATE_NORMAL;
+#endif
+
+    /* Tell the rest of the system we are done loading the file list */
     display_info.state = SYSTEM_RUNNING;
 
     /* Tell the specturm analyzer it can run */
@@ -79,8 +87,10 @@ void *setup_database( void *data ) {
     /* Load the statistics routine (needed for playlist_manager() to call pick_song()) */
     start_song_picker();
     squash_signal( database_info.stats_finished );
+    squash_log("stats loaded");
 
     load_all_meta_data( TYPE_META ); /* Load info files */
+    squash_log("metadata loaded");
 
     return (void *)NULL;
 }
@@ -102,13 +112,18 @@ void load_db_filenames( void ) {
         database_info.stats_loaded = 0;
     }
 
-    /* Check the path to see if it exists */
-    if( stat(config.db_paths[ BASENAME_SONG ], &path_stat) != 0 ) {
-        squash_error( "The path or file '%s' does not exist or I can't open it", config.db_paths[ BASENAME_SONG ] );
-    }
+    /* If we are supposed to use a master list and it already exists */
+    if( config.db_masterlist_path != NULL && stat(config.db_masterlist_path, &path_stat) == 0 ) {
+        load_masterlist();
+    } else {
+        /* Check the path to see if it exists */
+        if( stat(config.db_paths[ BASENAME_SONG ], &path_stat) != 0 ) {
+            squash_error( "The path or file '%s' does not exist or I can't open it", config.db_paths[ BASENAME_SONG ] );
+        }
 
-    /* We need to walk the directory tree and load bunches of files */
-    _walk_filesystem( NULL, _load_file );
+        /* We need to walk the directory tree and load bunches of files */
+        _walk_filesystem( NULL, _load_file );
+    }
 
     squash_log("Songs loaded %d", database_info.song_count);
 
@@ -119,6 +134,77 @@ void load_db_filenames( void ) {
     /* Trim database_info.songs[]'s allocated size */
     database_info.song_count_allocated = database_info.song_count;
     squash_realloc( database_info.songs, database_info.song_count_allocated * sizeof(song_info_t) );
+
+    if( config.db_masterlist_path != NULL ) {
+        save_masterlist();
+    }
+}
+
+void load_masterlist( void ) {
+    FILE *masterlist_file;
+    struct stat file_info;
+    char *file_data;
+    char *cur_data;
+    char *this_line;
+
+    /* Open the file to write out the playlist */
+    if( (masterlist_file = fopen(config.db_masterlist_path, "r")) == NULL ) {
+        squash_log("Couldn't open masterlist file, probably didn't exist");
+        return;
+    }
+
+    if( fstat(fileno(masterlist_file), &file_info) ) {
+        squash_log("Couldn't stat masterlist file");
+        fclose( masterlist_file );
+        return;
+    }
+
+    if( (file_data = (char *)mmap( NULL, file_info.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fileno(masterlist_file), 0)) == MAP_FAILED ) {
+        squash_log("Couldn't mmap masterlist file");
+        fclose( masterlist_file );
+        return;
+    }
+
+    cur_data = file_data;
+    while( cur_data != NULL ) {
+        this_line = strsep( &cur_data, "\n" );
+        /* if not a line, empty, or is a comment */
+        if( !(this_line == NULL || strlen(this_line) == 0 || this_line[0] == '#') ) {
+            _load_file( this_line, TRUE );
+        }
+    }
+
+    /* Close the playlist file */
+    fclose( masterlist_file );
+}
+
+void save_masterlist( void ) {
+    FILE *masterlist_file;
+    time_t current_time;
+    int i;
+
+    if( config.db_readonly ) {
+        return;
+    }
+
+    /* Open the file to write out the masterlist */
+    if( (masterlist_file = fopen(config.db_masterlist_path, "w")) == NULL ) {
+        squash_error( "Can't open file \"%s\" for writing", config.db_masterlist_path );
+    }
+
+    /* Write out header */
+    time( &current_time );
+    fprintf( masterlist_file, "# Saved Squash masterlist\n" );
+    fprintf( masterlist_file, "# Auto-Generated on %s\n", ctime(&current_time) );
+
+    /* Write out the masterlist */
+    for( i = 0; i < database_info.song_count; i++ ) {
+        fprintf( masterlist_file, "%s\n", database_info.songs[i].filename );
+    }
+
+    /* Close the masterlist file */
+    fclose( masterlist_file );
+
 }
 
 /*
@@ -391,11 +477,29 @@ void load_meta_data( song_info_t *song, enum meta_type_e which ) {
         return;
     }
 
-    metaname = build_fullfilename( song, db_extensions[which].which_basename );
+    metaname = NULL;
+    /* If this is an empeg, we may be reading the original empeg's player's
+     * database files.  In which case music files we find that end it a 0,
+     * will probably have a meta file that ends instead with 1.  We will
+     * load that instead of the normal .info file. */
+#ifdef EMPEG
+    if( which == TYPE_META ) {
+        int length;
+        length = strlen(song->filename);
+        if( length > 0 && song->filename[length-1] == '0' ) {
+            song->filename[length-1] = '1';
+            metaname = build_fullfilename( song, BASENAME_SONG );
+            song->filename[length-1] = '0';
+        }
+    }
+#endif
+    if( metaname == NULL ) {
+        metaname = build_fullfilename( song, db_extensions[which].which_basename );
+    }
 
     /* Parse the file unless we want to reload/save from the original song file */
     if( config.db_overwriteinfo && config.db_saveinfo && which == TYPE_META ) {
-        success = false;
+        success = FALSE;
     } else {
         success = parse_file( metaname, db_extensions[which].add_data, (void *)song );
     }
@@ -403,7 +507,7 @@ void load_meta_data( song_info_t *song, enum meta_type_e which ) {
     /* If we didn't load from the stat/info file, and we have a info file,
      * try to load it from the original song file */
     if( !success && which == TYPE_META ) {
-        song_type = get_song_type( song->filename );
+        song_type = get_song_type( song->basename[BASENAME_SONG], song->filename );
 
         if( song_type != TYPE_UNKNOWN ) {
             filename = build_fullfilename( song, BASENAME_SONG );
@@ -566,8 +670,8 @@ void set_stat_data( void *data, char *header, char *key, char *value ) {
 /*
  * Load a song into the database.  This is called from _walk_filesystem()
  */
-void _load_file( char *filename ) {
-    enum song_type_e type;
+void _load_file( char *filename, bool trust ) {
+    enum song_type_e type = TYPE_UNKNOWN;
     song_info_t *song;
 
     /* Avoid mistakes */
@@ -575,11 +679,13 @@ void _load_file( char *filename ) {
         return;
     }
 
-    /* Determine the song type */
-    type = get_song_type( filename );
+    /* Determine the song type unless we trust this file */
+    if( !trust ) {
+        type = get_song_type( config.db_paths[ BASENAME_SONG ], filename );
+    }
 
-    /* If filename is a known music type, load it into the database */
-    if( type != TYPE_UNKNOWN ) {
+    /* If filename is a known music type or we trust it, load it into the database */
+    if( type != TYPE_UNKNOWN || trust ) {
         /* Make sure we have enough memory */
         squash_ensure_alloc( database_info.song_count, database_info.song_count_allocated,
                 database_info.songs, sizeof(song_info_t), INITIAL_DB_SIZE, *=2 );
@@ -597,17 +703,34 @@ void _load_file( char *filename ) {
         /* Update the counter */
         database_info.song_count++;
 
+#ifdef EMPEG
+        if( database_info.song_count % 50 == 0 ) {
+            int x = database_info.song_count, i = 3;
+            char buf[5] = "0000";
+            while( i >= 0 && x > 0 ) {
+                buf[i] += x % 10;
+                x /= 10;
+                i--;
+            }
+            vfdlib_clear( display_info.screen, 0 );
+            vfdlib_drawText( display_info.screen, "Squash Loading, version " SQUASH_VERSION, 0, 0, 2, 3);
+            vfdlib_drawText( display_info.screen, buf, 0, 6, 2, 3 );
+            ioctl(display_info.screen_fd, _IO('d', 0));
+        }
+#endif
+#ifndef NO_NCURSES
         /* Display progress every 500 songs */
         if( database_info.song_count % 500 == 0) {
             draw_info();
         }
+#endif
     }
 }
 
 /*
  * Walk a filesystem and call loader() on any files found
  */
-void _walk_filesystem( char *base_dir, void(*loader)(char *) ) {
+void _walk_filesystem( char *base_dir, void(*loader)(char *, bool) ) {
     DIR *dir;
     struct dirent *file_entry;
     struct stat file_stat;
@@ -669,7 +792,7 @@ void _walk_filesystem( char *base_dir, void(*loader)(char *) ) {
             if( S_ISDIR(file_stat.st_mode) ) {
                 _walk_filesystem( file_path, loader );
             } else {
-                loader( file_path );
+                loader( file_path, FALSE );
             }
         }
 

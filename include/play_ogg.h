@@ -22,10 +22,10 @@
 #ifndef SQUASH_PLAY_OGG_H
 #define SQUASH_PLAY_OGG_H
 
-#include <vorbis/codec.h>        /* Vorbis Decoder */
 #ifdef TREMOR
     #include <tremor/ivorbisfile.h>    /* Tremor Decoder */
 #else
+    #include <vorbis/codec.h>        /* Vorbis Decoder */
     #include <vorbis/vorbisfile.h>    /* Vorbis Decoder */
 #endif
 

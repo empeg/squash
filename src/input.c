@@ -25,12 +25,83 @@
 #include "player.h"     /* for player_queue_command() */
 #include "database.h"   /* for clear_song_meta() and load_meta_data() */
 #include "stat.h"       /* for feedback() */
+#include "sound.h"      /* for */
 #include "input.h"
+
+void *ir_monitor( void *input_data ) {
+#ifdef EMPEG
+    long last_button = -1, button = -1;
+    int result, fd;
+
+    fd = open("/dev/ir", O_RDONLY );
+    if(fd == -1) {
+        squash_error("Can't open ir");
+    }
+
+    while( 1 ) {
+        squash_log("ir loop");
+        result = read(fd, (char *) &button, 4);
+        if( result == -1 ) {
+            squash_error("Error reading buttons");
+        }
+        #ifdef INPUT_DEBUG
+        squash_log( "Got button %x", button );
+        #endif
+        switch( button ) {
+            case IR_TOP_BUTTON_PRESSED:
+            case IR_RIGHT_BUTTON_PRESSED:
+            case IR_LEFT_BUTTON_PRESSED:
+            case IR_BOTTOM_BUTTON_PRESSED:
+            case IR_KNOB_PRESSED:
+                last_button = button;
+                break;
+            case IR_TOP_BUTTON_RELEASED:
+            case IR_RIGHT_BUTTON_RELEASED:
+            case IR_LEFT_BUTTON_RELEASED:
+            case IR_BOTTOM_BUTTON_RELEASED:
+                if( (button & 0xFFFFFFFE) == last_button ) {
+                    switch( button ) {
+                        case IR_TOP_BUTTON_RELEASED:
+                            do_toggle_player_command();
+                            break;
+                        case IR_BOTTOM_BUTTON_RELEASED:
+                            do_quit();
+                            break;
+                        case IR_LEFT_BUTTON_RELEASED:
+                            do_set_player_command( CMD_STOP );
+                            break;
+                        case IR_RIGHT_BUTTON_RELEASED:
+                            do_set_player_command( CMD_SKIP );
+                            break;
+                        case IR_KNOB_RELEASED:
+                        default:
+                            break;
+                    }
+                }
+                break;
+            case IR_KNOB_LEFT:
+                squash_lock( player_info.lock );
+                sound_adjust_volume( player_info.device, -2 );
+                squash_unlock( player_info.lock );
+                break;
+            case IR_KNOB_RIGHT:
+                squash_lock( player_info.lock );
+                sound_adjust_volume( player_info.device, +2 );
+                squash_unlock( player_info.lock );
+                break;
+            default:
+                break;
+        }
+    }
+#endif
+    return 0;
+}
 
 /*
  * Monitor keyboard events
  */
 void *keyboard_monitor( void *input_data ) {
+#ifndef NO_NCURSES
     struct timespec sleep_time = { 0, 100000000 };
     int cur_key_pressed;
 
@@ -117,6 +188,7 @@ void *keyboard_monitor( void *input_data ) {
         }
     }
 
+#endif
     return 0;
 }
 
@@ -131,6 +203,7 @@ void *fifo_monitor( void *input_data ) {
     bool invalid_line;
 
     while( 1 ) {
+        squash_log("ir loop");
         #ifdef INPUT_DEBUG
         squash_log("(re)Opening fifo");
         #endif
@@ -160,23 +233,13 @@ void *fifo_monitor( void *input_data ) {
             squash_log("got: %s", buffer);
             #endif
             /* now buffer should have a command in it */
-            if( strncasecmp( buffer, "refresh\n", 8 ) == 0 ) {
+            if( 0 ) {
+#ifndef NO_NCURSES
+            } else if( strncasecmp( buffer, "refresh\n", 8 ) == 0 ) {
                 do_clear();
                 do_resize();
-            } else if ( strncasecmp( buffer, "quit\n", 5 ) == 0 ) {
-                do_quit();
             } else if ( strncasecmp( buffer, "spectrum_button\n", 16 ) == 0 ) {
                 do_toggle_spectrum_state();
-            } else if( strncasecmp( buffer, "play\n", 5 ) == 0 ) {
-                do_set_player_command( CMD_PLAY );
-            } else if ( strncasecmp( buffer, "pause\n", 6 ) == 0 ) {
-                do_set_player_command( CMD_PAUSE );
-            } else if ( strncasecmp( buffer, "play_button\n", 12 ) == 0 ) {
-                do_toggle_player_command();
-            } else if ( strncasecmp( buffer, "skip\n", 5 ) == 0 ) {
-                do_set_player_command( CMD_SKIP );
-            } else if ( strncasecmp( buffer, "stop\n", 5 ) == 0 ) {
-                do_set_player_command( CMD_STOP );
             } else if ( strncasecmp( buffer, "info_button\n", 11 ) == 0 ) {
                 do_toggle_info_command();
             } else if ( strncasecmp( buffer, "tab\n", 7 ) == 0 ) {
@@ -201,6 +264,19 @@ void *fifo_monitor( void *input_data ) {
                 do_arrow(HOME);
             } else if ( strncasecmp( buffer, "end\n", 4 ) == 0 ) {
                 do_arrow(END);
+#endif
+            } else if ( strncasecmp( buffer, "quit\n", 5 ) == 0 ) {
+                do_quit();
+            } else if( strncasecmp( buffer, "play\n", 5 ) == 0 ) {
+                do_set_player_command( CMD_PLAY );
+            } else if ( strncasecmp( buffer, "pause\n", 6 ) == 0 ) {
+                do_set_player_command( CMD_PAUSE );
+            } else if ( strncasecmp( buffer, "play_button\n", 12 ) == 0 ) {
+                do_toggle_player_command();
+            } else if ( strncasecmp( buffer, "skip\n", 5 ) == 0 ) {
+                do_set_player_command( CMD_SKIP );
+            } else if ( strncasecmp( buffer, "stop\n", 5 ) == 0 ) {
+                do_set_player_command( CMD_STOP );
             }
         }
         fclose( fifo_info.fifo_file );
@@ -209,6 +285,7 @@ void *fifo_monitor( void *input_data ) {
     return 0;
 }
 
+#ifndef NO_NCURSES
 /*
  * Force a clear of the screen
  */
@@ -218,7 +295,9 @@ void do_clear( void ) {
     refresh();
     squash_unlock( display_info.lock );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
  * Handle screen resize
  */
@@ -227,6 +306,7 @@ void do_resize( void ) {
     draw_screen();
     squash_unlock( display_info.lock );
 }
+#endif
 
 /*
  * Handle quiting the program
@@ -293,6 +373,7 @@ void do_toggle_player_command( void ) {
     squash_broadcast( player_command.changed );
 }
 
+#ifndef NO_NCURSES
 /*
  * Set the spectrum window size.
  */
@@ -319,7 +400,9 @@ void do_set_spectrum_state( enum window_states_e new_state ) {
 
     squash_broadcast( spectrum_ring.changed );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
  * Toggle the spectrum window size.
  */
@@ -350,7 +433,9 @@ void do_toggle_spectrum_state( void ) {
 
     squash_broadcast( spectrum_ring.changed );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
  * Handle toggling info window
  */
@@ -368,7 +453,9 @@ void do_toggle_info_command( void ) {
     draw_screen();
     squash_unlock( display_info.lock );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
  * Handle directional keys
  */
@@ -457,7 +544,9 @@ void do_arrow( enum direction_e direction ) {
     squash_unlock( display_info.lock );
     squash_broadcast( display_info.changed );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
  * Handle delete event
  */
@@ -535,7 +624,9 @@ void do_delete( void ) {
     squash_broadcast( song_queue.not_full );
     squash_broadcast( display_info.changed );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
  * Handle Tab event
  */
@@ -563,7 +654,9 @@ void do_tab( void ) {
     draw_screen();
     squash_unlock( display_info.lock );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
  * Handle edit command
  */
@@ -648,3 +741,4 @@ void do_edit_command( void ) {
     draw_screen();
     squash_unlock( display_info.lock );
 }
+#endif

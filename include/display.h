@@ -33,14 +33,26 @@ void *display_monitor( void *input_data );
 
 /* Draw Sections of the Screen */
 void draw_screen( void );
+#ifdef EMPEG
+void draw_empeg_display( void );
+#endif
+#ifndef NO_NCURSES
 void draw_now_playing( void );
 void draw_list( int which_window );
 void draw_help( void );
 void draw_info( void );
 void draw_spectrum( void );
+#endif
 
 /* Helper Functions */
-void draw_meta_string( WINDOW *win, song_info_t *song, char *meta_key, int top, int left, int width );
+#ifndef NO_NCURSES
+void draw_meta_string( WINDOW *win, song_info_t *song, key_set_t key_set, int top, int left, int width );
+#endif
+#ifdef EMPEG
+void draw_string_monospaced_empeg( char *buffer, char *string, int top, int left, int spacing );
+void draw_string_empeg( char *buffer, char *string, int top, int left, int width );
+void draw_meta_string_empeg( char *buffer, song_info_t *song, key_set_t key_set, int top, int left, int width );
+#endif
 int num_chars( long value );
 
 #endif

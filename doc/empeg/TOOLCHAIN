@@ -1,0 +1,28 @@
+In order to install squash onto the empeg, you will need a toolchain
+for your computer which can compile programs for the empeg (which is
+a strongARM).  You maybe able to find one that works on the internet.
+This document describes the steps necessary to install one on a debian
+system using debian's tools.
+
+1) Goto http://people.debian.org/~debacle/cross.html .  This guide
+worked for me and I will be following it.  The only problem I had with
+it was that he did not specify all packages that needed to be installed.
+I will try to mention those extra packages here.  I may have left some
+out, please let me know.
+
+2) apt-get install toolchain-source debconf debhelper autoconf2.13 fakeroot
+
+3) edit /etc/dpkg/cross-compile, set "crossbase" to "/usr".
+
+4) cd /usr/src && EMAIL='asdf@asdf.com' tpkg-make arm-linux
+
+5) cd binutils-arm-linux-*/ && DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc" debuild && debi
+
+6) cd /usr/src && tpkg-install-libc arm-linux
+
+7) cd gcc-arm-linux-* && DEBUILD_DPKG_BUILDPACKAGE_OPTS="-us -uc" debuild && debi
+
+8) Rejoice, or if you have error messages bang head on monitor to summon
+the computer spirits of long past (perhaps they'll aid you, or maybe
+just demand pizza and caffeine).
+

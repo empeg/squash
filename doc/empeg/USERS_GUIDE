@@ -1,0 +1,28 @@
+Please see the regular USERS_GUIDE for configuration settings, and the
+empeg/INSTALL file for how to get squash running on the empeg.
+
+Once squash is running the current keymap is this:
+
+UP          Play/Pause
+LEFT        Stop
+RIGHT       Skip
+DOWN        Quit
+KNOB LEFT   Lower volume
+KNOW RIGHT  Raise volume
+
+Please note that you will probably want to use the [database]
+masterlist_filename option to speed load times.  However, if you change
+what music is on the empeg, you must delete this file for squash to notice
+the new files.  (It will probably crash too if you do not).  You can
+have squash regenerate the file for you (which takes a little while if
+you have USE_MAGIC support), or you can just generate it yourself,
+
+Assuming you have a copy of the music you have send to the player on
+your local linux box this should work:
+
+find the_music -type f \( -iname '*.mp3' -or -iname '*.ogg' \) -printf
+"%P\n" > squash_masterlist
+
+The masterlist must only contain existing files, and these files must
+be either mp3s or oggs.  Otherwise squash will probably bomb.
+

@@ -61,7 +61,6 @@ void *player( void *input_data ) {
     /* make the compiler happy */
     cur_song_info = NULL;
     cur_song_type = TYPE_UNKNOWN;
-    cur_sound_device = NULL;
     cur_decoder_data = NULL;
 
     while( 1 ) {
@@ -156,10 +155,12 @@ void *player( void *input_data ) {
                 /* Get the next song */
                 cur_song_info = get_next_song_info();
 
+                squash_log("Playing: %s", cur_song_info->filename);
+
                 squash_unlock( song_queue.lock );
 
                 /* Setup the song information */
-                cur_song_type = get_song_type( cur_song_info->filename );
+                cur_song_type = get_song_type( cur_song_info->basename[ BASENAME_SONG ], cur_song_info->filename );
 
                 /* Make sure this is a file we can deal with */
                 if( cur_song_type == TYPE_UNKNOWN ) {
@@ -169,11 +170,14 @@ void *player( void *input_data ) {
                 /* Open the decoder  */
                 squash_asprintf(full_filename, "%s/%s", cur_song_info->basename[ BASENAME_SONG ], cur_song_info->filename );
                 cur_decoder_data = song_functions[ cur_song_type ].open( full_filename, &sound_format );
+                if( cur_decoder_data == NULL ) {
+                    squash_error("Problem opening song file %s", full_filename);
+                }
                 silence_duration = 0;
 
                 /* Open the sound device */
-                cur_sound_device = sound_open(sound_format); // mem leak here or at close.
-                if( cur_sound_device == NULL ) {
+                player_info.device = sound_open(sound_format); // mem leak here or at close.
+                if( player_info.device == NULL ) {
                     squash_error("Problem opening the sound device!");
                 }
 
@@ -225,6 +229,9 @@ void *player( void *input_data ) {
                 }
                 player_info.current_position = cur_frame_data.position;
 
+                cur_sound_device = player_info.device;  /* grab a copy of the device
+                                                         * (hope that the sound driver itself is thread safe */
+
                 /* Unlock the mutex */
                 squash_unlock( player_info.lock );
 
@@ -243,8 +250,12 @@ void *player( void *input_data ) {
                 /* Close the decoder */
                 song_functions[ cur_song_type ].close( cur_decoder_data );
 
+                squash_lock( player_info.lock );
                 /* Close the sound device */
-                sound_close( cur_sound_device );
+                sound_close( player_info.device );
+                squash_unlock( player_info.lock );
+
+                squash_free( full_filename );
 
                 play_state = STATE_BEFORE_SONG;
                 break;

@@ -54,6 +54,7 @@ void *playlist_manager( void *input_data ) {
 
     /* Load songs */
     while( 1 ) {
+        squash_log("playlist loop");
         /* Acquire lock */
         squash_wlock( database_info.lock );
         squash_lock( song_queue.lock );
@@ -176,7 +177,7 @@ void load_playlist( void ) {
         squash_lock( song_queue.lock );
 
         this_line = strsep( &cur_data, "\n" );
-        /* if not an line empty, or is a comment */
+        /* if not a line, empty, or is a comment */
         if( !(this_line == NULL || strlen(this_line) == 0 || this_line[0] == '#') ) {
             squash_log("Going to try to load: %s", this_line);
 

@@ -1,0 +1,24 @@
+This lists what features have been completed or not for the empeg port
+of squash.
+
+DONE:
+Displays Current Song
+Allows Button Presses
+Uses Masterlist to aid startup time
+Volume Control
+Turns off display after quit
+Reasonably good looking display
+
+NOT DONE:
+Do something about long load time for playing an mp3 (mainly calculating the duration of the song).
+Spectrum analyzer port
+Better magic (some files not detected)
+Fix invalid lseek() in tremor and a few others (probably the toolchain)
+Long button presses, more interface
+Add remote button
+Confirmation for player quit
+Turn off player
+Buffer Audio
+Integrate Hijack
+Call sync after writes
+

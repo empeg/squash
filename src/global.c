@@ -39,6 +39,7 @@ config_keys_t config_keys[ CONFIG_KEY_COUNT ] = {
     { "Database", "Info_Path", (void *)&config.db_paths[ BASENAME_META ], TYPE_STRING },
     { "Database", "Stat_Path", (void *)&config.db_paths[ BASENAME_STAT ], TYPE_STRING },
     { "Database", "Song_Path", (void *)&config.db_paths[ BASENAME_SONG ], TYPE_STRING },
+    { "Database", "Masterlist_Filename", (void *)&config.db_masterlist_path, TYPE_STRING },
     { "Database", "Readonly", (void *)&config.db_readonly, TYPE_INT },
     { "Database", "Save_Info", (void *)&config.db_saveinfo, TYPE_INT },
     { "Database", "Overwrite_Info", (void *)&config.db_overwriteinfo, TYPE_INT },
@@ -56,7 +57,7 @@ config_keys_t config_keys[ CONFIG_KEY_COUNT ] = {
  * Return the file format of the song (mp3, ogg, etc.).
  * TODO: Check using something smarter than just the filename
  */
-enum song_type_e get_song_type( const char *file_name ) {
+enum song_type_e get_song_type( const char *base_name, const char *file_name ) {
     enum song_type_e type;
     unsigned int file_name_length;
 
@@ -71,9 +72,31 @@ enum song_type_e get_song_type( const char *file_name ) {
     /* Determine the correct play functions */
     if( !strncasecmp(file_name + file_name_length - 4, ".mp3", 4) ) {
         type = TYPE_MP3;
-    } else  if( !strncasecmp(file_name + file_name_length - 4, ".ogg", 4) ) {
+    } else if( !strncasecmp(file_name + file_name_length - 4, ".ogg", 4) ) {
         type = TYPE_OGG;
     }
+
+#ifdef USE_MAGIC
+    if( type == TYPE_UNKNOWN ) {
+        char buf[4] = {'\0','\0','\0','\0'};
+        FILE *file;
+        char *full_name;
+        asprintf( &full_name, "%s/%s", base_name, file_name );
+        if( (file = fopen(full_name, "r")) == NULL ) {
+            squash_error( "Can't open %s to determine filetype", file_name );
+        }
+        fread( buf, 4, 1, file );
+        if( (buf[0] == '\xFF' && (buf[1] & '\xE0') == '\xE0' ) ||
+            (buf[0] == 'I' && buf[1] == 'D' && buf[2] == '3' && buf[3] == 3) ) {
+            squash_log("Magically mp3-delicious");
+            type = TYPE_MP3;
+        } else if ( buf[0] == 'O' && buf[1] == 'g' && buf[2] == 'g' && buf[3] == 'S' ) {
+            type = TYPE_OGG;
+        }
+        fclose( file );
+        squash_free( full_name );
+    }
+#endif
 
     /* Return the information */
     return type;
@@ -426,6 +449,10 @@ void set_config( void *data, char *header, char *key, char *value ) {
  * Expands a path name (tilde expansion, etc.).
  */
 void expand_path( char **path ) {
+#ifdef EMPEG
+    /* This routine does a nice segfault on the empeg unit. */
+    return;
+#else
     wordexp_t wordexp_buffer;
     if( *path == NULL ) {
         return;
@@ -445,6 +472,7 @@ void expand_path( char **path ) {
     squash_free( *path );
     *path = strdup( wordexp_buffer.we_wordv[0] );
     wordfree( &wordexp_buffer );
+#endif
 }
 
 /* Reads configuration values */
@@ -455,6 +483,7 @@ void init_config( void ) {
     config.db_paths[ BASENAME_SONG ] = strdup(".");
     config.db_paths[ BASENAME_META ] = NULL;
     config.db_paths[ BASENAME_STAT ] = NULL;
+    config.db_masterlist_path = NULL;
     config.db_readonly = 0;
     config.db_saveinfo = 1;
     config.db_overwriteinfo = 0;
@@ -494,6 +523,7 @@ void init_config( void ) {
     expand_path( &config.db_paths[ BASENAME_SONG ] );
     expand_path( &config.db_paths[ BASENAME_META ] );
     expand_path( &config.db_paths[ BASENAME_STAT ] );
+    expand_path( &config.db_masterlist_path );
 #ifdef DEBUG
     expand_path( &config.squash_log_path );
 #endif

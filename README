@@ -6,7 +6,7 @@ you do not spend valuable time in order to listen to your music.
 The player accomplishes this by automatically picking good music more
 often than bad music.  It also will not play the same song over and
 over again.  Lastly, squash will decide what is a good and bad song
-simply by whether or not you skip the song it has choosen for you.
+simply by whether or not you skip the song it chooses for you.
 
 The result is a perfect background music player.  It's like a radio
 station that will tune itself automatically to your listening
@@ -20,20 +20,21 @@ Picks better songs more frequently than worse songs.
 Decides what is better and worse automatically.
 Avoids picking the same song repeatedly.
 Cool (text) graphical analyzer.
-Standard meta information (Artist, etc.) stored in seperate file*.
+Standard meta information (Artist, etc.) stored in separate file*.
 Statistics meta information (for picking songs) also stored in
-seperate file*.
+separate file*.
 FIFO control file, for external control (for example, joysticks).
+Ported for empeg devices (a StrongARM based car stereo) as well as
+the regular linux PC.
 
 Future Features:
-Support for empeg devices (a StrongARM based car stereo).
 Allow selection of what songs the player picks from (rather than the
 entire collection).
 
 * Reading can be done directly so you do not have to store this
 separate file.  Also, the files may be stored in separate directories.
 Last, you may create this separate automatically at player start up
-or manualy with a separate script.
+or manually with a separate script.
 
 Some technical details:
 
@@ -55,12 +56,21 @@ Support for removal of ncurses will be added later.
 To compile squash just run 'make'.  There are some configuration
 options, though specifying them is currently clunky:
 
+EMPEG               turn on and off various settings to allow squash
+                    to run on an empeg device
+EMPEG_DSP           use empeg dsp directly instead of libao
+USE_MAGIC           if filename doesn't end in a proper extension,
+                    try reading the magic bytes at the front of the
+                    file to determine file type.
+NO_NCURSES          Turn off the ncurses display.  This will make
+                    squash headless on the PC (controled only by
+                    the control fifo).
 NO_FFTW             turn off spectrum (needs fftw, the fourier
                     transform library)
 NO_VORBIS_COMMENT   turn off ability to read vorbis comments directly
                     (note you still need vorbisfile to play ogg files)
 NO_ID3LIB           turn off ability to read id3v2 comments directly
-DEBUG               turn on debuging
+DEBUG               turn on debugging
 LOCK_DEBUG          turn on lock debugging (also enables DEBUG)
 INPUT_DEBUG         turn on input debugging (also enables DEBUG)
 TREMOR              turn on tremor support

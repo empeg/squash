@@ -25,12 +25,30 @@
 #include "database.h"   /* for get_meta_data() */
 #include "stat.h"       /* for get_rating() */
 #include "version.h"    /* for SQUASH_VERSION */
+#ifdef EMPEG
+    #include "vfdlib.h" /* for vfdlib_*() */
+#endif
 #include "display.h"
+
+
 
 /*
  * Initialize the ncurses display and window system.
  */
 void display_init( void ) {
+#ifdef EMPEG
+    if( (display_info.screen_fd = open( "/dev/display", O_RDWR )) == -1 ) {
+        squash_error("Can't open /dev/display");
+    }
+    if( (int)(display_info.screen = mmap( 0, 2048, PROT_READ | PROT_WRITE, MAP_SHARED, display_info.screen_fd, 0 )) == -1 ) {
+        squash_error("Can't mmap /dev/display");
+    }
+    ioctl(display_info.screen_fd, _IOW('d', 1, int), 1);
+    vfdlib_clear( display_info.screen, 0 );
+    vfdlib_drawText( display_info.screen, "Squash Loading, version " SQUASH_VERSION, 0, 0, 2, 3);
+    ioctl(display_info.screen_fd, _IO('d', 0));
+#endif
+#ifndef NO_NCURSES
     /* Initialize curses */
     (void) initscr();               /* Initialize the curses library */
     keypad( stdscr, TRUE );         /* Enable keyboard mapping */
@@ -56,8 +74,10 @@ void display_init( void ) {
         init_pair( TEXT_BLUE_SELECTED, COLOR_WHITE, COLOR_BLUE );
         init_pair( TEXT_BLUE_BACKGROUND, COLOR_BLUE, COLOR_BLUE );
     }
+#endif
 }
 
+#ifndef NO_NCURSES
 /*
  * Set the windows to their initial values
  */
@@ -101,6 +121,7 @@ void window_init( void ) {
     display_info.window[ WIN_HELP ].state = WIN_STATE_NORMAL;
     display_info.window[ WIN_HELP ].window = NULL;
 }
+#endif
 
 /*
  * Display thread function.  Updates the screen if any changes
@@ -122,11 +143,16 @@ void *display_monitor( void *input_data ) {
         squash_lock( player_info.lock );
 
         /* Update the screen */
+#ifdef EMPEG
+        draw_empeg_display();
+#endif
+#ifndef NO_NCURSES
         draw_now_playing();
         draw_list( WIN_PLAYLIST );
         draw_list( WIN_PASTLIST );
         draw_info();
         draw_help();
+#endif
 
         /* Release locks */
         squash_unlock( player_info.lock );
@@ -136,7 +162,6 @@ void *display_monitor( void *input_data ) {
         squash_unlock( display_info.lock );
     }
 
-    /* Shouldn't ever get here */
     return (void *)NULL;
 }
 
@@ -145,6 +170,7 @@ void *display_monitor( void *input_data ) {
  * windows in case of screen resize, or if a window changes size.
  */
 void draw_screen( void ) {
+#ifndef NO_NCURSES
     int screen_width, screen_height;
     int available_rows, used_rows;
     int calc_window_weight_total;
@@ -294,8 +320,54 @@ void draw_screen( void ) {
     squash_unlock( past_queue.lock );
     squash_unlock( song_queue.lock );
     squash_runlock( database_info.lock );
+#endif
 }
 
+#ifdef EMPEG
+void draw_empeg_display( void ) {
+    song_info_t *cur_song;
+    key_set_t title_set = (key_set_t) { (char *[]){"title"}, 1 };
+    key_set_t artist_set = (key_set_t) { (char *[]){"artist", "artist_original"}, 2 };
+    key_set_t album_set = (key_set_t) { (char *[]){"album", "album_original", "source"}, 3 };
+    key_set_t tracknumber_set = (key_set_t) { (char *[]){"tracknumber", "tracknr"}, 2 };
+
+    cur_song = player_info.song;
+
+    vfdlib_clear( display_info.screen, 0 );
+#define WIDTH 128
+    vfdlib_drawLineVertClipped( display_info.screen, WIDTH, 0, 31, 2);
+    vfdlib_drawLineHorizClipped( display_info.screen, 24, 0, WIDTH, 2);
+    draw_meta_string_empeg( display_info.screen, cur_song, title_set, 6, 0, WIDTH );
+    draw_meta_string_empeg( display_info.screen, cur_song, artist_set, 12, 0, WIDTH );
+    draw_meta_string_empeg( display_info.screen, cur_song, album_set, 18, 0, WIDTH );
+    draw_string_empeg( display_info.screen, "Track: ", 26, 4*11+3, WIDTH-4*11-3 );
+    draw_meta_string_empeg( display_info.screen, cur_song, tracknumber_set, 26, 4*11+3+6*4, WIDTH-4*11-3-6*4 );
+    {
+        char buf[12];
+        int pos_min, pos_sec, dur_min, dur_sec;
+        pos_min = (player_info.current_position/1000) / 60;
+        if( pos_min > 99 ) {
+            pos_min = 99;
+        }
+        pos_sec = (player_info.current_position/1000) % 60;
+        dur_min = (player_info.duration/1000) / 60;
+        if( dur_min > 99 ) {
+            dur_min = 99;
+        }
+        dur_sec = (player_info.duration/1000) % 60;
+        snprintf(buf, 12, "%02d:%02d-%02d:%02d", pos_min, pos_sec, dur_min, dur_sec );
+        draw_string_monospaced_empeg( display_info.screen, buf, 26, 0, 4 );
+    }
+    if( player_info.duration != 0 ) {
+        int pos = WIDTH*player_info.current_position/player_info.duration;
+        vfdlib_drawPointClipped( display_info.screen, pos ,24, 3);
+    }
+    ioctl(display_info.screen_fd, _IO('d', 0));
+#undef WIDTH
+}
+#endif
+
+#ifndef NO_NCURSES
 /*
  * Draw the now playing window
  */
@@ -306,6 +378,10 @@ void draw_now_playing( void ) {
     song_info_t *cur_song;
     long cur_duration, cur_position;
     int time_left;
+    key_set_t title_set = (key_set_t) { (char *[]){"title"}, 1 };
+    key_set_t artist_set = (key_set_t) { (char *[]){"artist", "artist_original"}, 2 };
+    key_set_t album_set = (key_set_t) { (char *[]){"album", "album_original"}, 2 };
+    key_set_t tracknumber_set = (key_set_t) { (char *[]){"tracknumber"}, 1 };
 
     /* Set the window */
     if( (win = display_info.window[WIN_NOW_PLAYING].window) == NULL ) {
@@ -374,10 +450,10 @@ void draw_now_playing( void ) {
     time_left = win_width - num_chars(cur_position / 60) - num_chars(cur_duration / 60) - 8;
 
     /* Print song information */
-    draw_meta_string( win, cur_song, "title", 1, 10, win_width - 16 );
-    draw_meta_string( win, cur_song, "artist", 2, 10, win_width - 16 );
-    draw_meta_string( win, cur_song, "album", 3, 10, time_left - 12 );
-    draw_meta_string( win, cur_song, "tracknumber", 4, 10, 9 );
+    draw_meta_string( win, cur_song, title_set, 1, 10, win_width - 16 );
+    draw_meta_string( win, cur_song, artist_set, 2, 10, win_width - 16 );
+    draw_meta_string( win, cur_song, album_set, 3, 10, time_left - 12 );
+    draw_meta_string( win, cur_song, tracknumber_set, 4, 10, 9 );
 
     /* Process Time Information */
     if( cur_duration >= 0 ) {
@@ -419,7 +495,9 @@ void draw_now_playing( void ) {
     /* Refresh the window */
     wrefresh( win );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
  * Draw the playlist window
  */
@@ -434,6 +512,9 @@ void draw_list( int which_window ) {
     bool have_focus;
     song_queue_t *queue;
     char *header;
+    key_set_t title_set = (key_set_t) { (char *[]){"title"}, 1 };
+    key_set_t artist_set = (key_set_t) { (char *[]){"artist", "artist_original"}, 2 };
+    key_set_t album_set = (key_set_t) { (char *[]){"album", "album_original"}, 2 };
 
     switch( which_window ) {
         case WIN_PLAYLIST:
@@ -573,9 +654,9 @@ void draw_list( int which_window ) {
             }
 
             /* Print playlist information */
-            draw_meta_string( win, cur_queue_entry->song_info, "artist", i + 2, col_left[0], col_width );
-            draw_meta_string( win, cur_queue_entry->song_info, "title", i + 2, col_left[1], col_width );
-            draw_meta_string( win, cur_queue_entry->song_info, "album", i + 2, col_left[2], col_width );
+            draw_meta_string( win, cur_queue_entry->song_info, artist_set, i + 2, col_left[0], col_width );
+            draw_meta_string( win, cur_queue_entry->song_info, title_set, i + 2, col_left[1], col_width );
+            draw_meta_string( win, cur_queue_entry->song_info, album_set, i + 2, col_left[2], col_width );
 
             if( (i + start_index) == queue->selected && have_focus ) {
                 wattroff( win, select_color );
@@ -589,7 +670,9 @@ void draw_list( int which_window ) {
     /* Refresh Changes */
     wrefresh( win );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
  * Draw the spectrum window.
  */
@@ -671,7 +754,9 @@ void draw_spectrum( void ) {
     /* Refresh Changes */
     wrefresh( win );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
  * Draw the help window
  */
@@ -713,7 +798,9 @@ void draw_help( void ) {
     /* Refresh Changes */
     wrefresh( win );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
  * Draw the info window.
  */
@@ -821,17 +908,22 @@ void draw_info( void ) {
     /* Refresh Changes */
     wrefresh( win );
 }
+#endif
 
+#ifndef NO_NCURSES
 /*
- * Draws all values for a key within a song entry.
- * Will also take into account limited display space.
+ * Draws all values for a set of keys within a song entry.
+ * Will also take into account limited display space (units are characters).
  */
-void draw_meta_string( WINDOW *win, song_info_t *song, char *meta_key, int top, int left, int width ) {
+void draw_meta_string( WINDOW *win, song_info_t *song, key_set_t key_set, int top, int left, int width ) {
     char *line_buffer;
     char *cur_format;
     meta_key_t *meta_data;
     int line_width;
-    int i;
+    int i, j;
+
+    /* Allow room for trailing semi-colon */
+    width += 2;
 
     /* Allocate space for the buffer */
     squash_malloc( line_buffer, width + 1 );
@@ -841,24 +933,31 @@ void draw_meta_string( WINDOW *win, song_info_t *song, char *meta_key, int top, 
     line_buffer[0] = '\0';
     cur_format = "%s; ";
 
-    meta_data = get_meta_data( song, meta_key );
-
-    if( meta_data == NULL || meta_data->value_count == 0 ) {
-        line_width += snprintf( line_buffer, width + 1, "[Unknown]" );
-    } else {
-        for( i = 0; (i < meta_data->value_count) && (line_width < width); i++ ) {
-            /* Change the format if this is the last item */
-            if( i == (meta_data->value_count - 1) ) {
-                cur_format = "%s";
-            }
-
+    for( i = 0; (i < key_set.key_count) && (line_width < width); i++ ) {
+        meta_data = get_meta_data( song, key_set.keys[i] );
+        if( meta_data == NULL ) {
+            continue;
+        }
+        for( j = 0; (j < meta_data->value_count) && (line_width < width); j++ ) {
             /* Add the current value to the line */
-            line_width += snprintf( line_buffer + line_width, width - line_width + 1, cur_format, meta_data->values[i] );
+            line_width += snprintf( line_buffer + line_width, width - line_width + 1, cur_format, meta_data->values[j] );
         }
     }
 
+    if( line_width == 0 ) {
+        line_width += snprintf( line_buffer, width + 1, "[Unknown]" );
+    } else {
+        /* remove trailing "; " */
+        if( line_width <= width ) {
+            line_buffer[ line_width - 2 ] = '\0';
+            line_width -= 2;
+        }
+        width -= 2;
+    }
+
     /* Show elipse if required */
-    if( line_width > width ) {
+    if( line_width - 2 > width ) {
+        line_buffer[ width ] = '\0';
         line_buffer[ width - 1 ] = '.';
         line_buffer[ width - 2 ] = '.';
         line_buffer[ width - 3 ] = '.';
@@ -870,6 +969,148 @@ void draw_meta_string( WINDOW *win, song_info_t *song, char *meta_key, int top, 
     /* Cleanup */
     squash_free( line_buffer );
 }
+#endif
+
+#ifdef EMPEG
+/*
+ * Draws an arbitrary string to the display using spacing pixels between each charater.
+ * (numbers have max width of 4, and characters have a max width of 6)
+ */
+void draw_string_monospaced_empeg( char *buffer, char *string, int top, int left, int spacing ) {
+    int x, width;
+    char tmp[2] = " ";
+    for( x = left; *string != '\0'; x += spacing, string++ ) {
+        tmp[0] = *string;
+        width = vfdlib_getTextWidth( tmp, 2 );
+        vfdlib_drawText( buffer, tmp, x+(spacing-width+1)/2, top, 2, 3);
+    }
+}
+#endif
+
+#ifdef EMPEG
+/*
+ * Draws an arbitrary string.
+ * Will also take into account limited display space (units are pixels).
+ * Assumes the largest character is 6 pixels.
+ * (to guess how few characters we need to remove when we are wrong).
+ */
+void draw_string_empeg( char *buffer, char *string, int top, int left, int width ) {
+    char *line_buffer;
+    int line_width, cur_width;
+    int trim;
+
+    line_buffer = strdup( string );
+    line_width = strlen( string );
+    cur_width = vfdlib_getTextWidth( line_buffer, 2 );
+    while( cur_width > width ) {
+        trim = (cur_width - width + 5)/6;
+        if( trim < 1 ) {
+            trim = 1;
+        }
+        line_width -= trim;
+        line_buffer[ line_width ] = '\0';
+        cur_width = vfdlib_getTextWidth( line_buffer, 2 );
+    }
+    vfdlib_drawText( buffer, line_buffer, left, top, 2, 3);
+
+    /* Cleanup */
+    squash_free( line_buffer );
+}
+#endif
+
+#ifdef EMPEG
+/*
+ * Draws all values for a set of keys within a song entry.
+ * Will also take into account limited display space (units are pixels).
+ */
+void draw_meta_string_empeg( char *buffer, song_info_t *song, key_set_t key_set, int top, int left, int width ) {
+    char *line_buffer;
+    meta_key_t *meta_data;
+    int line_width; /* number of characters */
+    int line_pixel_width; /* number of pixels */
+    int line_alloc; /* number of characters allocated, not including null */
+    int i, j, k;
+    char cur_char[2] = " ";
+    int space_width, semicolon_width, dot_width;
+    bool added_trail;
+
+    /* If we can't even fit the elipses, just don't print anything */
+    if( vfdlib_getTextWidth( "...", 2 ) > width ) {
+        return;
+    }
+    space_width = vfdlib_getTextWidth( " ", 2 );
+    semicolon_width = vfdlib_getTextWidth( ";", 2 );
+    dot_width = vfdlib_getTextWidth( ".", 2 );
+
+    /* Allocate space for the buffer (assume each character is 1 pixel, and make room for the elipses/trailing "; ") */
+    line_alloc = width + 3;
+    squash_calloc( line_buffer, line_alloc+1, 1 );
+
+    /* Build the string */
+    line_width = 0;
+    line_pixel_width = 0;
+    added_trail = FALSE;
+
+    for( i = 0; (i < key_set.key_count) && (line_width < line_alloc); i++ ) {
+        meta_data = get_meta_data( song, key_set.keys[i] );
+        if( meta_data == NULL ) {
+            continue;
+        }
+        for( j = 0; (j < meta_data->value_count) && (line_width < line_alloc); j++ ) {
+            /* Add each character to the line_buffer */
+            for( k = 0; (meta_data->values[j][k] != '\0') && (line_width < line_alloc); k++ ) {
+                line_buffer[line_width] = meta_data->values[j][k];
+                line_width++;
+                cur_char[0] = meta_data->values[j][k];
+                line_pixel_width += vfdlib_getTextWidth( cur_char, 2 );
+            }
+            /* Add a semicolon and space */
+            line_buffer[line_width] = ';';
+            line_width++;
+            line_pixel_width += semicolon_width;
+            line_buffer[line_width] = ' ';
+            line_width++;
+            line_pixel_width += space_width;
+            added_trail = TRUE;
+        }
+    }
+    /* Remove the trailing "; " */
+    if( added_trail ) {
+        line_buffer[line_width - 2] = '\0';
+        line_width -= 2;
+        line_pixel_width -= semicolon_width;
+        line_pixel_width -= space_width;
+    }
+
+    /* If we are overflowed, first add the elipses */
+    if( line_pixel_width > width ) {
+        line_buffer[ line_width ] = '.';
+        line_width++;
+        line_pixel_width += dot_width;
+        line_buffer[ line_width ] = '.';
+        line_width++;
+        line_pixel_width += dot_width;
+        line_buffer[ line_width ] = '.';
+        line_width++;
+        line_pixel_width += dot_width;
+
+        /* While we are overflown, move the elipses up one. */
+        while( line_pixel_width > width && line_width - 4 > 0 ) {
+            cur_char[0] = line_buffer[ line_width - 4 ];
+            line_pixel_width -= vfdlib_getTextWidth( cur_char, 2 );
+            line_buffer[ line_width - 4 ] = '.';
+            line_pixel_width += dot_width;
+            line_buffer[ line_width - 1 ] = '\0';
+            line_pixel_width -= dot_width;
+            line_width--;
+        }
+    }
+    vfdlib_drawText( buffer, line_buffer, left, top, 2, 3);
+
+    /* Cleanup */
+    squash_free( line_buffer );
+}
+#endif
 
 /*
  * Returns the number of characters a whole number will take up.

@@ -6,46 +6,51 @@ Configuration settings:
 Info_Path=~/music
 Stat_Path=~/music
 Song_Path=~/music
+Masterlist_Filename=
 Readonly=1
 Save_Info=1
 Overwrite_Info=0
 
-The Database section specifies how squash deals with finding
-your music and wether and where it will create a database to
-make loading faster.
+The Database section specifies how squash deals with finding your music
+and wether and where it will create a database to make loading faster.
 
-Info_Path is the location of the database created by squash.
-Stat_Path is the location of the statistics gathered by squash,
-in order to pick good songs for you.
-Song_Path is the location of your music.
+Info_Path is the location of the database created by squash.  Stat_Path is
+the location of the statistics gathered by squash, in order to pick good
+songs for you.  Song_Path is the location of your music.
 
-It is perfectly ok to have all three of these paths overlap.
-You may want to not have them overlap if:
+It is perfectly ok to have all three of these paths overlap.  You may
+want to not have them overlap if:
     1) You are a clean-freak and do not like the clutter
        (squash creates a database file and a statistics file
         for each song file it finds).
     2) You are using a filesystem where lots of files slows
        things down.
+    3) You may want to use ftp or other simple tool to transfer
+       only the songs, info or stat.
 
-Readonly affects two things, whether squash will save statistics,
-and whether squash will save the current playlist.  This setting
-is mainly intended to help debuging.
+Masterlist_Filename is the location of the masterlist, which is a
+list of files to use, instead of looking in Song_Path.  Note, that if
+Masterlist_Filename is not specified, squash will look in Song_Path.
+Also, the list of files in Masterlist_Filename will have Song_Path added
+to it.
+
+Readonly affects two things, whether squash will save statistics, and
+whether squash will save the current playlist.  This setting is mainly
+intended to help debuging.
 
 Save_Info determines whether squash will save database files.
-Overwrite_Info will cause squash to overwrite current database
-files with the current information in the songs' current tags.
+Overwrite_Info will cause squash to overwrite current database files
+with the current information in the songs' current tags.
 
 [Global]
 Control_Filename=~/.squash_control
 Log_Filename=~/.squash_log
 
-Control_Filename determines the name of the control file.  You
-may send squash commands like this:
-echo pause >> ~/.squash_control
+Control_Filename determines the name of the control file.  You may send
+squash commands like this: echo pause >> ~/.squash_control
 
-Log_Filename is intended for debuging purposes only.  It
-probably will not be recognized by a normal installation of
-squash.
+Log_Filename is intended for debuging purposes only.  It probably will
+not be recognized by a normal installation of squash.
 
 [Playlist]
 Filename=~/.squash_playlist
@@ -54,31 +59,27 @@ Size=16
 [Pastlist]
 Size=16
 
-Playlist Filename determines where the playlist is saved after
-squash exits.  squash will load these files into the playlist
-next time it is run.  (Note: squash will ignore any entries on
-the playlist that do not exist in Database Song_Path).
+Playlist Filename determines where the playlist is saved after squash
+exits.  squash will load these files into the playlist next time it
+is run.  (Note: squash will ignore any entries on the playlist that do
+not exist in Database Song_Path).
 
-Playlist Size and Pastlist Size determine how many items squash
-will try to keep in each window.
+Playlist Size and Pastlist Size determine how many items squash will
+try to keep in each window.
 
 Key presses:
 Q           Quits Squash.
-C           Toggles the spectrum analyzer window on/off and
-            maximized.
+C           Toggles the spectrum analyzer window on/off and maximized.
 P           Toggles the play/paused status.
 T           Stops the playing.
 S           Skips the currently played song.
-E           Edits the currently highlighted song, uses the
-            EDITOR environment variable to know what text
-            editor to launch.
+E           Edits the currently highlighted song, uses the EDITOR
+            environment variable to know what text editor to launch.
 I           Toggles the detailed info window on/off
-<DEL>       Deletes the current entry (only in the Playlist
-            window).
-<TAB>       Changes the currently focused window (between the
-            now playing, playlist and pastlist windows).
+<DEL>       Deletes the current entry (only in the Playlist window).
+<TAB>       Changes the currently focused window (between the now
+            playing, playlist and pastlist windows).
 <ARROW>,    Move in the playlist or pastlist windows.
 <HOME/END>,
 <PGUP/DOWN>
-
 

@@ -23,9 +23,13 @@
 #define SQUASH_PLAY_MP3_H
 
 #include <mad.h>    /* MP3 Decoder */
-#undef bool         /* make id3lib play with ncurses, let's hope that doesn't
-                     * come back and haunt us. */
-#include <id3.h>    /* id3lib to read tags */
+#ifndef NO_ID3LIB
+    #ifndef NO_NCURSES
+        #undef bool         /* make id3lib play with ncurses, let's hope that doesn't
+                             * come back and haunt us. */
+    #endif
+    #include <id3.h>    /* id3lib to read tags */
+#endif
 
 /*
  * Structures

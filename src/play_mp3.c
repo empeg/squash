@@ -70,9 +70,9 @@ void *mp3_open( char *filename, sound_format_t *sound_format ) {
         break;
     }
 
-    sound_format->channels = MAD_NCHANNELS(&m_header);
     sound_format->rate = m_header.samplerate;
-    sound_format->byte_format = AO_FMT_LITTLE;
+    sound_format->channels = MAD_NCHANNELS(&m_header);
+    sound_format->byte_format = SOUND_LITTLE;
     sound_format->bits = 16;
 
     mad_header_finish(&m_header);

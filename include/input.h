@@ -37,19 +37,38 @@ fifo_info_t fifo_info;
  */
 enum direction_e { UP, DOWN, LEFT, RIGHT, PAGE_UP, PAGE_DOWN, HOME, END };
 
+#ifdef EMPEG
+#define IR_TOP_BUTTON_PRESSED           0x00000000
+#define IR_TOP_BUTTON_RELEASED          0x00000001
+#define IR_RIGHT_BUTTON_PRESSED         0x00000002
+#define IR_RIGHT_BUTTON_RELEASED        0x00000003
+#define IR_LEFT_BUTTON_PRESSED          0x00000004
+#define IR_LEFT_BUTTON_RELEASED         0x00000005
+#define IR_BOTTOM_BUTTON_PRESSED        0x00000006
+#define IR_BOTTOM_BUTTON_RELEASED       0x00000007
+#define IR_KNOB_PRESSED                 0x00000008
+#define IR_KNOB_RELEASED                0x00000009
+#define IR_KNOB_RIGHT                   0x0000000a
+#define IR_KNOB_LEFT                    0x0000000b
+#endif
+
 /*
  * Prototypes
  */
+void *ir_monitor( void *input_data );
 void *keyboard_monitor( void *input_data );
 void *fifo_monitor( void *input_data );
 
+#ifndef NO_NCURSES
 void do_clear( void );
 void do_resize( void );
+#endif
 void do_quit( void );
 
 void do_set_player_command( enum player_command_e );
 void do_toggle_player_command( void );
 
+#ifndef NO_NCURSES
 void do_set_spectrum_state( enum window_states_e new_state  );
 void do_toggle_spectrum_state( void  );
 
@@ -60,5 +79,6 @@ void do_delete( void );
 void do_tab( void );
 
 void do_edit_command( void );
+#endif
 
 #endif

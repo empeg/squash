@@ -27,6 +27,7 @@
  */
 void sound_init( void );
 sound_device_t *sound_open( sound_format_t sound_format );
+void sound_adjust_volume( sound_device_t *sound, int adjustment );
 void sound_play( frame_data_t frame_data, sound_device_t *sound_device );
 void sound_close( sound_device_t *device );
 void sound_shutdown( void );

@@ -9,6 +9,7 @@ User Interface:
     Editing meta tags
     Playlist selection, modification
     Configuration file
+    Viewing past items
 Database:
     Scan filesystem and load metatags
     Extract meta-data directly from OGG files
@@ -39,7 +40,6 @@ NOT DONE:
 User Interface:
     SEEK
     Searching and insertion
-    Viewing past items
     Better handling of smaller screens
 Database:
 Player:

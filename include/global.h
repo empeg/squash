@@ -35,9 +35,26 @@
 #include <pthread.h>
 #include <signal.h>
 #include <unistd.h>
-#include <fftw.h>
-#include <curses.h>
-#include <ao/ao.h>
+#include <errno.h>
+#ifndef NO_FFTW
+    #include <fftw.h>
+#endif
+#ifdef NO_NCURSES
+    typedef unsigned char bool;
+    typedef char chtype;
+    #define FALSE 0
+    #define TRUE 1
+#else
+    #include <curses.h>
+#endif
+#ifdef EMPEG_DSP
+    #define SOUND_LITTLE 0
+    #define SOUND_BIG 1
+#else
+    #include <ao/ao.h>
+    #define SOUND_LITTLE AO_FMT_LITTLE
+    #define SOUND_BIG AO_FMT_BIG
+#endif
 #include <math.h>
 #include <stdarg.h>
 #include <wait.h>
@@ -45,14 +62,17 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <wordexp.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 
 /*
  * Definitions
  */
 #ifdef DEBUG
-    #define CONFIG_KEY_COUNT 11
+    #define CONFIG_KEY_COUNT 12
 #else
-    #define CONFIG_KEY_COUNT 10
+    #define CONFIG_KEY_COUNT 11
 #endif
 
 /*
@@ -71,6 +91,8 @@ enum meta_type_e { TYPE_META, TYPE_STAT }; /* these match with db_extensions arr
 enum player_state_e { STATE_PLAY, STATE_PAUSE, STATE_STOP, STATE_BIG_STOP };
 enum player_command_e { CMD_NOOP, CMD_PLAY, CMD_PAUSE, CMD_STOP, CMD_SKIP };
 
+#ifdef NO_NCURSES
+#else
 enum window_states_e {
     WIN_STATE_NORMAL,
     WIN_STATE_HIDDEN,
@@ -99,6 +121,7 @@ enum windows_e {
     WIN_HELP,
     WIN_COUNT /* faux entry, not a real window */
 };
+#endif
 
 /*
  * Structures
@@ -114,6 +137,7 @@ typedef struct config_keys_s {
 
 typedef struct config_s {
     char *db_paths[3];
+    char *db_masterlist_path;
     int db_readonly;
     int db_saveinfo;
     int db_overwriteinfo;
@@ -153,6 +177,11 @@ typedef struct song_info_s {
     stat_info_t stat;
 } song_info_t;
 
+typedef struct key_set_s {
+    char **keys;
+    int key_count;
+} key_set_t;
+
 typedef struct db_search_result_s {
     song_info_t **songs;
     int song_count;
@@ -182,8 +211,27 @@ typedef struct database_info_s {
 } database_info_t;
 
 /* Sound device structures */
+#ifdef EMPEG_DSP
+typedef struct sound_device_s {
+    int audio;
+    int mixer;
+    char *buffer;
+    int buffer_size;
+    int volume[2];
+} sound_device_t;
+typedef struct sound_format_s {
+/* While these are set, the empeg dsp code will not work
+ * unless rate is 44100, channels is 2, byte_format is little,
+ * and bits is 16.  This will be fixed later. */
+    int rate;
+    int channels;
+    int byte_format;
+    int bits;
+} sound_format_t;
+#else
 typedef ao_device sound_device_t;
 typedef ao_sample_format sound_format_t;
+#endif
 
 /* Playback Structures */
 typedef struct frame_data_s {
@@ -238,6 +286,7 @@ typedef struct player_info_s {
     song_info_t *song;
     long duration;
     long current_position;
+    sound_device_t *device;
 } player_info_t;
 
 typedef struct status_info_s {
@@ -247,6 +296,7 @@ typedef struct status_info_s {
     int exit_status;
 } status_info_t;
 
+#ifndef NO_NCURSES
 /* Window Info */
 typedef struct win_info_s {
     WINDOW *window;
@@ -264,13 +314,20 @@ typedef struct win_info_s {
     unsigned int is_fixed : 1;
     unsigned int is_persistent : 1;
 } win_info_t;
+#endif
 
 typedef struct display_info_s {
     pthread_mutex_t lock;
     pthread_cond_t changed;
     enum system_state_e state;
+#ifdef EMPEG
+    int screen_fd;
+    char *screen;
+#endif
+#ifndef NO_NCURSES
     win_info_t window[ WIN_COUNT ];
     int focus;
+#endif
 } display_info_t;
 
 /* Log information */
@@ -295,9 +352,11 @@ typedef struct spectrum_info_s {
     pthread_mutex_t lock;
     double *window;
     sound_format_t sound_format;
+#ifndef NO_FFTW
     fftw_complex *in;
     fftw_complex *out;
     fftw_plan plan;
+#endif
     chtype *bitmap;
     double *bar_heights;
     double *cap_heights;
@@ -379,7 +438,7 @@ log_info_t log_info;
 /*
  * Prototypes
  */
-enum song_type_e get_song_type( const char *file_name );
+enum song_type_e get_song_type( const char *base_name, const char *file_name );
 void _squash_error( const char *filename, int line_num, const char *format, ... );
 void _squash_log( const char *filename, int line_num, const char *format, ... );
 bool parse_file( const char *file_name, void(*add_data)(void*, char*, char*, char*), void *data );

@@ -34,6 +34,8 @@
 void *setup_database( void *data );
 
 void load_db_filenames( void );
+void load_masterlist( void );
+void save_masterlist( void );
 void clear_song_meta( song_info_t *song );
 void clear_db( void );
 
@@ -53,7 +55,7 @@ void set_stat_data( void *data, char *header, char *key, char *value );
 void save_stat_data( song_info_t *song, FILE *file );
 bool is_stat_data_changed( song_info_t *song );
 
-void _load_file( char *filename );
-void _walk_filesystem( char *base_dir, void(*loader)(char *) );
+void _load_file( char *filename, bool trust );
+void _walk_filesystem( char *base_dir, void(*loader)(char *, bool) );
 
 #endif

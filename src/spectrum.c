@@ -117,7 +117,9 @@ void *spectrum_monitor( void *input_data ) {
         squash_unlock( spectrum_ring.lock );
 
         spectrum_render();
+#ifndef NO_NCURSES
         draw_spectrum();
+#endif
 
         squash_unlock( spectrum_info.lock );
         squash_unlock( display_info.lock );
@@ -137,11 +139,13 @@ void spectrum_init( void ) {
     /* ring buffer */
     squash_malloc( spectrum_ring.ring , SPECTRUM_RING_SIZE*4*sizeof(char) );
 
+#ifndef NO_FFTW
     /* ff input buffer */
     squash_malloc( spectrum_info.in , SPECTRUM_WINDOW_SIZE*sizeof(fftw_complex) );
 
     /* ff output buffer */
     squash_malloc( spectrum_info.out , SPECTRUM_WINDOW_SIZE*sizeof(fftw_complex) );
+#endif
 
     squash_malloc( spectrum_info.window , SPECTRUM_WINDOW_SIZE*sizeof(double) );
 
@@ -153,20 +157,18 @@ void spectrum_init( void ) {
     spectrum_info.cap_heights = NULL;
     spectrum_info.bar_heights = NULL;
 
-#ifdef NO_FFTW
-    spectrum_info.plan = NULL;
-#else
-    spectrum_info.plan = fftw_create_plan(SPECTRUM_WINDOW_SIZE, FFTW_FORWARD, FFTW_ESTIMATE);
-#endif
-
     spectrum_ring.active = FALSE;
     spectrum_ring.head = 0;
     spectrum_ring.tail = 0;
+
+#ifndef NO_FFTW
+    spectrum_info.plan = fftw_create_plan(SPECTRUM_WINDOW_SIZE, FFTW_FORWARD, FFTW_ESTIMATE);
 
     for( i = 0; i < SPECTRUM_WINDOW_SIZE; i++ ) {
         spectrum_info.out[i].im = 0.0;
         spectrum_info.out[i].re = 0.0;
     }
+#endif
 
     return;
 }
@@ -179,9 +181,9 @@ void spectrum_deinit( void ) {
 #ifdef NO_FFTW
 #else
     fftw_destroy_plan(spectrum_info.plan);
-#endif
     squash_free(spectrum_info.out);
     squash_free(spectrum_info.in);
+#endif
     squash_free(spectrum_info.bitmap);
     squash_free(spectrum_info.cap_heights);
     squash_free(spectrum_info.bar_heights);
@@ -210,6 +212,7 @@ void spectrum_reset( sound_format_t sound_format ) {
 
     spectrum_info.sound_format = sound_format;
 
+#ifndef NO_FFTW
     /* Reset the spectrum buffer */
     for( i = 0; i < SPECTRUM_WINDOW_SIZE; i++ ) {
         spectrum_info.in[i].im = 0.0;
@@ -217,6 +220,7 @@ void spectrum_reset( sound_format_t sound_format ) {
         spectrum_info.out[i].im = 0.0;
         spectrum_info.out[i].re = 0.0;
     }
+#endif
 
     /* Reset the positions of the bar_widths */
     if( spectrum_info.bitmap != NULL ) {
@@ -293,6 +297,7 @@ void spectrum_update( frame_data_t frame ) {
  * fftw in buffer
  */
 void spectrum_prepare_render( void ) {
+#ifndef NO_FFTW
     short sample;
     double window_factor;
     int index, i;
@@ -313,6 +318,7 @@ void spectrum_prepare_render( void ) {
             }
         }
     }
+#endif
 }
 
 /*
@@ -321,15 +327,13 @@ void spectrum_prepare_render( void ) {
  * draw_spectrum() will do the actual drawing.
  */
 void spectrum_render( void ) {
+#ifndef NO_FFTW
     chtype *cur_bitmap;
     int height, width;
     int i, j, x, cur_height, y, max_spectrum, power_count;
     double avg_power;
 
-#ifdef NO_FFTW
-#else
     fftw_one(spectrum_info.plan, spectrum_info.in, spectrum_info.out);
-#endif
 
     height = spectrum_info.height;
     width = spectrum_info.width;
@@ -403,5 +407,6 @@ void spectrum_render( void ) {
             *cur_bitmap++ = ' ';
         }
     }
+#endif
 }
 
