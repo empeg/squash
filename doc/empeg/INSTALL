@@ -251,8 +251,9 @@ dhcpcd.
 III) Setting up Squash on the Empeg
 
 You will need to make a directory /drive0/squash and send the compiled squash
-to /drive0/squash, and also send empeg/squash.conf to /etc/squash.conf .
-Make sure squash is chmod 755 and squash.conf is chmod 644.
+to /drive0/squash, and also send empeg/squash.conf to
+/drive0/squash/squash.conf . Make sure squash is chmod 755 and squash.conf is
+chmod 644.
 
 You need to make a /drive0/squash/music directory and also put lots of
 music in there.  You can have squash read the original player's database
