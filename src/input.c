@@ -30,12 +30,131 @@
 
 #include "sys/time.h"   /* for struct timeval */
 
+void do_remove_playlist_entry() {
+#ifdef EMPEG
+    int i;
+    song_queue_entry_t *queue_entry;
+    song_queue_entry_t *queue_last_entry;
+
+    squash_wlock( database_info.lock );
+    squash_lock( song_queue.lock );
+    if( song_queue.selected < song_queue.size ) {
+        queue_entry = song_queue.head;
+        queue_last_entry = NULL;
+        for( i = 0; i < song_queue.selected; i++ ) {
+            queue_last_entry = queue_entry;
+            queue_entry = queue_entry->next;
+        }
+        if( queue_last_entry != NULL ) {
+            queue_last_entry->next = queue_entry->next;
+        }
+        if( queue_entry == song_queue.head ) {
+            song_queue.head = queue_entry->next;
+        }
+        if( queue_entry == song_queue.tail ) {
+            song_queue.tail = queue_last_entry;
+        }
+        feedback( queue_entry->song_info , -1);
+        squash_free( queue_entry );
+        song_queue.size--;
+    }
+    squash_unlock( song_queue.lock );
+    squash_wunlock( database_info.lock );
+    squash_broadcast( song_queue.not_full );
+#endif
+}
+
+void do_song_rating_adjust( bool relative, int amount ) {
+    song_info_t *song = NULL;
+
+#ifdef EMPEG
+    if( display_info.cur_screen == EMPEG_SCREEN_PLAY_RATE_SONG || display_info.cur_screen == EMPEG_SCREEN_PLAY ) {
+#else
+    if( display_info.focus == WIN_NOW_PLAYING ) {
+#endif
+        song = player_info.song;
+#ifdef EMPEG
+    } else if( 0 ) {
+#else
+    } else if( display_info.focus == WIN_PLAYLIST ) {
+#endif
+        int i;
+        song_queue_entry_t *queue_entry;
+        song_queue_entry_t *queue_last_entry;
+
+        squash_lock( song_queue.lock );
+        if( song_queue.selected < song_queue.size ) {
+            queue_entry = song_queue.head;
+            queue_last_entry = NULL;
+            for( i = 0; i < song_queue.selected; i++ ) {
+                queue_last_entry = queue_entry;
+                queue_entry = queue_entry->next;
+            }
+            song = queue_entry->song_info;
+        }
+        squash_unlock( song_queue.lock );
+#ifdef EMPEG
+    } else if( 0 ) {
+#else
+    } else if( display_info.focus == WIN_PASTLIST ) {
+#endif
+        int i;
+        song_queue_entry_t *queue_entry;
+        song_queue_entry_t *queue_last_entry;
+
+        squash_lock( past_queue.lock );
+        if( past_queue.selected < past_queue.size ) {
+            queue_entry = past_queue.head;
+            queue_last_entry = NULL;
+            for( i = 0; i < past_queue.selected; i++ ) {
+                queue_last_entry = queue_entry;
+                queue_entry = queue_entry->next;
+            }
+            song = queue_entry->song_info;
+        }
+        squash_unlock( past_queue.lock );
+    }
+
+    if( song ) {
+        double rating;
+
+        squash_wlock( database_info.lock );
+
+        rating = get_rating( song->stat );
+        database_info.sum -= rating;
+        database_info.sqr_sum -= rating * rating;
+
+        if( relative ) {
+            song->stat.manual_rating += amount;
+        } else {
+            song->stat.manual_rating = amount;
+        }
+
+        if( song->stat.manual_rating < -1 ) {
+            song->stat.manual_rating = -1;
+        }
+        if( song->stat.manual_rating > 10 ) {
+            song->stat.manual_rating = 10;
+        }
+
+        rating = get_rating( song->stat );
+        database_info.sum += rating;
+        database_info.sqr_sum += rating * rating;
+
+        song->stat.changed = TRUE;
+
+        save_song( song );
+
+        squash_wunlock( database_info.lock );
+    }
+}
+
 /*
  * This routine is called whenever an event occurs.
  * An event is defined as a key on the remote being pressed,
  * a knob being turned.  Or else a key on the panel or the knob
  * being pressed and released.  Also, a key on the panel or
- * the knob being held (help set to TRUE).
+ * the knob being held (held set to TRUE).
  *
  * The button returned will always be IR*PRESSED and not IR*RELEASED
  * (for the panel buttons).  Even though it will be a IR*PRESSED event,
@@ -49,6 +168,7 @@
  */
 void process_ir_event( long button, bool held ) {
 #ifdef EMPEG
+#ifdef ADVENTURE
     bool done;
 
     done = TRUE;
@@ -91,13 +211,8 @@ void process_ir_event( long button, bool held ) {
         case EMPEG_SCREEN_PLAY:
             switch( button ) {
                 case IR_TOP_BUTTON_PRESSED:
-/* top sub menu means top button acts as submenu, otherwise bottom button held acts as submenu */
-#ifdef TOP_SUB_MENU
                     display_info.cur_screen = EMPEG_SCREEN_PLAY_SUBMENU;
                     squash_broadcast( display_info.changed );
-#else
-                    do_toggle_player_command();
-#endif
                     break;
                 case IR_LEFT_BUTTON_PRESSED:
                     do_set_player_command( CMD_STOP );
@@ -106,18 +221,8 @@ void process_ir_event( long button, bool held ) {
                     do_set_player_command( CMD_SKIP );
                     break;
                 case IR_BOTTOM_BUTTON_PRESSED:
-#ifdef TOP_SUB_MENU
                     display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_1;
                     squash_broadcast( display_info.changed );
-#else
-                    if( button_held ) {
-                        display_info.cur_screen = EMPEG_SCREEN_PLAY_SUBMENU;
-                        squash_broadcast( display_info.changed );
-                    } else {
-                        display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_1;
-                        squash_broadcast( display_info.changed );
-                    }
-#endif
                     break;
                 case IR_KNOB_PRESSED:
                     break;
@@ -174,11 +279,8 @@ void process_ir_event( long button, bool held ) {
         case EMPEG_SCREEN_PLAYLIST:
             switch( button ) {
                 case IR_TOP_BUTTON_PRESSED:
-#ifdef TOP_SUB_MENU
                     display_info.cur_screen = EMPEG_SCREEN_PLAYLIST_SUBMENU;
                     squash_broadcast( display_info.changed );
-#else
-#endif
                    break;
                 case IR_LEFT_BUTTON_PRESSED:
                     squash_lock( song_queue.lock );
@@ -197,18 +299,8 @@ void process_ir_event( long button, bool held ) {
                     squash_broadcast( display_info.changed );
                     break;
                 case IR_BOTTOM_BUTTON_PRESSED:
-#ifdef TOP_SUB_MENU
                     display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_1;
                     squash_broadcast( display_info.changed );
-#else
-                    if( button_held ) {
-                        display_info.cur_screen = EMPEG_SCREEN_PLAYLIST_SUBMENU;
-                        squash_broadcast( display_info.changed );
-                    } else {
-                        display_info.cur_screen = EMPEG_SCREEN_NAVIGATION_1;
-                        squash_broadcast( display_info.changed );
-                    }
-#endif
                     break;
                 case IR_KNOB_PRESSED:
                     break;
@@ -249,13 +341,9 @@ void process_ir_event( long button, bool held ) {
         case EMPEG_SCREEN_PLAY_SUBMENU:
             switch( button ) {
                 case IR_TOP_BUTTON_PRESSED:
-#ifdef TOP_SUB_MENU
                     do_toggle_player_command();
                     display_info.cur_screen = EMPEG_SCREEN_PLAY;
                     squash_broadcast( display_info.changed );
-#else
-                    //display_info.cur_screen = EMPEG_SCREEN_NONE;
-#endif
                     break;
                 case IR_LEFT_BUTTON_PRESSED:
                     //display_info.cur_screen = EMPEG_SCREEN_NONE;
@@ -364,6 +452,276 @@ void process_ir_event( long button, bool held ) {
             break;
     }
     squash_unlock( display_info.lock );
+#else
+    bool done = FALSE;
+
+    squash_lock( display_info.lock );
+
+    if( button ==  IR_TOP_BUTTON_PRESSED && held ) {
+        done = TRUE;
+        switch( display_info.cur_screen ) {
+            case EMPEG_SCREEN_SET_RATING_BIAS:
+                database_info.stats_loaded = FALSE;
+                start_song_picker();
+                squash_signal( database_info.stats_finished );
+                break;
+            default:
+                break;
+        }
+
+        if( display_info.cur_screen == EMPEG_SCREEN_PLAY ) {
+            display_info.cur_screen = EMPEG_SCREEN_PLAYLIST;
+        } else {
+            display_info.cur_screen = EMPEG_SCREEN_PLAY;
+        }
+        display_info.in_menu = FALSE;
+    }
+
+    if( !done && display_info.in_menu ) {
+        menu_list_t menu = menu_list[ display_info.cur_screen ];
+        done = TRUE;
+        switch( button ) {
+            case IR_LEFT_BUTTON_PRESSED:
+                /* This assumes that the zero'th item is go back or something similar */
+                display_info.menu_selection = 0;
+                display_info.in_menu = ! menu.items[ display_info.menu_selection ].leave_menu;
+                display_info.cur_screen = menu.items[ display_info.menu_selection ].screen_on_press;
+                display_info.menu_selection = menu_list[ display_info.cur_screen ].default_item;
+                break;
+            case IR_RIGHT_BUTTON_PRESSED:
+            case IR_KNOB_PRESSED:
+                switch( display_info.cur_screen ) {
+                    case EMPEG_SCREEN_PLAYLIST:
+                        if( display_info.menu_selection == 4 ) { /* Remove from playlist */
+                            do_remove_playlist_entry();
+                        }
+                        break;
+                    default:
+                        break;
+                }
+                display_info.in_menu = ! menu.items[ display_info.menu_selection ].leave_menu;
+                display_info.cur_screen = menu.items[ display_info.menu_selection ].screen_on_press;
+                display_info.menu_selection = menu_list[ display_info.cur_screen ].default_item;
+                break;
+            case IR_TOP_BUTTON_PRESSED:
+            case IR_KNOB_LEFT:
+                if( display_info.menu_selection > 0 ) {
+                    display_info.menu_selection--;
+                }
+                break;
+            case IR_BOTTOM_BUTTON_PRESSED:
+            case IR_KNOB_RIGHT:
+                if( display_info.menu_selection+1 < menu.item_count ) {
+                    display_info.menu_selection++;
+                }
+                break;
+            default:
+                break;
+        }
+
+    }
+
+    if( !done ) {
+        /* This handles buttons that do not change meaning based on your current screen
+         * (mostly buttons on the remote) */
+        done = TRUE;
+        switch( button ) {
+            case IR_VOL_MINUS:
+                squash_lock( player_info.lock );
+                sound_adjust_volume( player_info.device, -2 );
+                squash_unlock( player_info.lock );
+                break;
+            case IR_VOL_PLUS:
+                squash_lock( player_info.lock );
+                sound_adjust_volume( player_info.device, +2 );
+                squash_unlock( player_info.lock );
+                break;
+            case IR_PROG: /* PLAY/PAUSE */
+                do_toggle_player_command();
+                break;
+            case IR_TRACK_MINUS:
+                do_set_player_command( CMD_STOP );
+                break;
+            case IR_TRACK_PLUS:
+                do_set_player_command( CMD_SKIP );
+                break;
+            default:
+                done = FALSE;
+                break;
+        }
+    }
+
+    /* handle knob confirm in quit screen */
+    if( !done && display_info.cur_screen == EMPEG_SCREEN_QUIT ) {
+        done = TRUE;
+        switch( button ) {
+            case IR_KNOB_PRESSED:
+                do_quit();
+                break;
+            default:
+                display_info.in_menu = TRUE;
+                display_info.cur_screen = EMPEG_SCREEN_MAIN_MENU;
+                display_info.menu_selection = menu_list[ display_info.cur_screen ].default_item;
+                break;
+        }
+    }
+
+    /* handle going to the menu screen (we may also have to do some event, such as update statistics */
+    if( !done ) {
+        switch( button ) {
+            case IR_BOTTOM_BUTTON_PRESSED:
+            case IR_KNOB_PRESSED:
+                switch( display_info.cur_screen ) {
+                    case EMPEG_SCREEN_SET_RATING_BIAS:
+                        database_info.stats_loaded = FALSE;
+                        start_song_picker();
+                        squash_signal( database_info.stats_finished );
+                        break;
+                    default:
+                        break;
+                }
+                done = TRUE;
+                display_info.in_menu = TRUE;
+                display_info.menu_selection = menu_list[ display_info.cur_screen ].default_item;
+                break;
+        }
+    }
+
+    /* If we aren't in a menu, handle each screen's key events */
+    if( !done ) {
+        switch( display_info.cur_screen ) {
+            case EMPEG_SCREEN_PLAY:
+                switch( button ) {
+                    case IR_TOP_BUTTON_PRESSED:
+                        do_toggle_player_command();
+                        break;
+                    case IR_LEFT_BUTTON_PRESSED:
+                        do_set_player_command( CMD_STOP );
+                        break;
+                    case IR_RIGHT_BUTTON_PRESSED:
+                        do_set_player_command( CMD_SKIP );
+                        break;
+                    case IR_KNOB_LEFT:
+                        squash_lock( player_info.lock );
+                        sound_adjust_volume( player_info.device, -2 );
+                        squash_unlock( player_info.lock );
+                        break;
+                    case IR_KNOB_RIGHT:
+                        squash_lock( player_info.lock );
+                        sound_adjust_volume( player_info.device, +2 );
+                        squash_unlock( player_info.lock );
+                        break;
+                    case IR_0:
+                    case IR_1:
+                    case IR_2:
+                    case IR_3:
+                    case IR_4:
+                    case IR_5:
+                    case IR_6:
+                    case IR_7:
+                    case IR_8:
+                    case IR_9:
+                        do_song_rating_adjust( FALSE, button - IR_0 );
+                        break;
+                    case IR_DIRECT:
+                        do_song_rating_adjust( FALSE, 10 );
+                        break;
+                    case IR_STAR:
+                        do_song_rating_adjust( FALSE, -1 );
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case EMPEG_SCREEN_PLAYLIST:
+                switch( button ) {
+                    case IR_KNOB_LEFT:
+                    case IR_LEFT_BUTTON_PRESSED:
+                        squash_lock( song_queue.lock );
+                        if( song_queue.selected > 0 ) {
+                            song_queue.selected--;
+                        }
+                        squash_unlock( song_queue.lock );
+                        break;
+                    case IR_KNOB_RIGHT:
+                    case IR_RIGHT_BUTTON_PRESSED:
+                        squash_lock( song_queue.lock );
+                        if( song_queue.selected < song_queue.size-1 ) {
+                            song_queue.selected++;
+                        }
+                        squash_unlock( song_queue.lock );
+                        break;
+                    case IR_TOP_BUTTON_PRESSED:
+                        do_remove_playlist_entry();
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case EMPEG_SCREEN_PLAY_RATE_SONG:
+            case EMPEG_SCREEN_PLAYLIST_RATE_SONG:
+                switch( button ) {
+                    case IR_KNOB_LEFT:
+                    case IR_LEFT_BUTTON_PRESSED:
+                        do_song_rating_adjust( TRUE, -1 );
+                        break;
+                    case IR_KNOB_RIGHT:
+                    case IR_RIGHT_BUTTON_PRESSED:
+                        do_song_rating_adjust( TRUE, +1 );
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case EMPEG_SCREEN_SET_RATING_BIAS:
+                switch( button ) {
+                    case IR_KNOB_LEFT:
+                    case IR_LEFT_BUTTON_PRESSED:
+                        config.db_manual_rating_bias -= 0.1;
+                        config.db_manual_rating_bias = (double)(int)(config.db_manual_rating_bias*10)/10;
+                        if( config.db_manual_rating_bias < 0.0 ) {
+                            config.db_manual_rating_bias = 0.0;
+                        }
+                        break;
+                    case IR_KNOB_RIGHT:
+                    case IR_RIGHT_BUTTON_PRESSED:
+                        config.db_manual_rating_bias += 0.1;
+                        config.db_manual_rating_bias = (double)(int)(config.db_manual_rating_bias*10)/10;
+                        if( config.db_manual_rating_bias > 1.0 ) {
+                            config.db_manual_rating_bias = 1.0;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            case EMPEG_SCREEN_SET_DISPLAY_BRIGHTNESS:
+                switch( button ) {
+                    case IR_KNOB_LEFT:
+                    case IR_LEFT_BUTTON_PRESSED:
+                        if( display_info.brightness >= 5 ) {
+                            display_info.brightness -= 5;
+                        }
+                        set_display_brightness_empeg( display_info.brightness );
+                        break;
+                    case IR_KNOB_RIGHT:
+                    case IR_RIGHT_BUTTON_PRESSED:
+                        if( display_info.brightness <= 95 ) {
+                            display_info.brightness += 5;
+                        }
+                        set_display_brightness_empeg( display_info.brightness );
+                        break;
+                    default:
+                        break;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+    squash_broadcast( display_info.changed );
+    squash_unlock( display_info.lock );
+#endif
 #endif
 }
 
@@ -456,6 +814,7 @@ void *ir_monitor( void *input_data ) {
                 case IR_RIGHT_BUTTON_RELEASED:
                 case IR_LEFT_BUTTON_RELEASED:
                 case IR_BOTTOM_BUTTON_RELEASED:
+                case IR_KNOB_RELEASED:
                     if( last_button == (button & 0xFFFFFFFE) ) {
                         button = last_button;
                     } else {
@@ -530,6 +889,14 @@ void *keyboard_monitor( void *input_data ) {
             case 9:
                 do_tab();
                 break;
+            case 'm':
+                do_song_rating_adjust( TRUE, -1 );
+                squash_broadcast( display_info.changed );
+                break;
+            case 'M':
+                do_song_rating_adjust( TRUE, +1 );
+                squash_broadcast( display_info.changed );
+                break;
             case 'd':
             case 'D':
             case KEY_DC:
@@ -583,7 +950,7 @@ void *fifo_monitor( void *input_data ) {
     bool invalid_line;
 
     while( 1 ) {
-        squash_log("ir loop");
+        squash_log("fifo loop");
         #ifdef INPUT_DEBUG
         squash_log("(re)Opening fifo");
         #endif
@@ -645,6 +1012,12 @@ void *fifo_monitor( void *input_data ) {
             } else if ( strncasecmp( buffer, "end\n", 4 ) == 0 ) {
                 do_arrow(END);
 #endif
+            } else if ( strncasecmp( buffer, "decrease_rating\n", 16 ) == 0 ) {
+                do_song_rating_adjust( TRUE, -1 );
+                squash_broadcast( display_info.changed );
+            } else if ( strncasecmp( buffer, "increase_rating\n", 16 ) == 0 ) {
+                do_song_rating_adjust( TRUE, +1 );
+                squash_broadcast( display_info.changed );
             } else if ( strncasecmp( buffer, "quit\n", 5 ) == 0 ) {
                 do_quit();
             } else if( strncasecmp( buffer, "play\n", 5 ) == 0 ) {

@@ -33,8 +33,8 @@ entire collection).
 
 * Reading can be done directly so you do not have to store this
 separate file.  Also, the files may be stored in separate directories.
-Last, you may create this separate automatically at player start up
-or manually with a separate script.
+Last, you may create this separate file automatically at player start
+up or manually with a separate script.
 
 Some technical details:
 
@@ -81,6 +81,10 @@ TREMOR              turn on tremor support
 To specify an option run 'DEBUG=1 make' instead of just 'make'.
 
 Please remember to run make clean before using a new set of options.
+
+If you are new to compiling software, or just forgot: remember to
+install both the library package (such as libmad0), -and- the library
+development package (such as libmad0-dev).
 
 Installation:
 

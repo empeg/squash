@@ -36,7 +36,8 @@ void *ogg_open( char *filename, sound_format_t *sound_format ) {
 
     /* Open the song */
     if( (file = fopen(filename, "r")) == NULL ) {
-        squash_error( "Unable to open file" );
+        return (void *)NULL;
+        // squash_error( "Unable to open file" );
     }
 
     /* Allocate space for data */
@@ -46,7 +47,8 @@ void *ogg_open( char *filename, sound_format_t *sound_format ) {
     if( ov_open(file, &ogg_data->file, NULL, 0) != 0 ) {
         squash_free( ogg_data );
         fclose( file );
-        squash_error( "Unable to open Vorbis file" );
+        return (void *)NULL;
+        // squash_error( "Unable to open Vorbis file" );
     }
 
     vorbis_info = ov_info(&ogg_data->file, -1);

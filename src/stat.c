@@ -28,8 +28,14 @@
  * The value will be between -1 and 1 exclusive.
  */
 double get_rating( stat_info_t stat ) {
-    return (double)( stat.play_count - stat.skip_count ) /
-           (double)( stat.play_count + stat.skip_count + 1 );
+    double auto_rating = (double)( stat.play_count - stat.skip_count ) /
+                         (double)( stat.play_count + stat.skip_count + 1 );
+    if( stat.manual_rating == -1 ) {
+        return auto_rating;
+    } else {
+        return auto_rating * (1 - config.db_manual_rating_bias ) +
+               ((double)stat.manual_rating-5.0)/5.0 * config.db_manual_rating_bias;
+    }
 }
 
 /*
@@ -43,11 +49,21 @@ void start_song_picker() {
     int i;
 
     squash_wlock( database_info.lock );
+
+    database_info.sum = 0;
+    database_info.sqr_sum = 0;
+    database_info.play_sum = 0;
+    database_info.play_sqr_sum = 0;
+    database_info.skip_sum = 0;
+    database_info.skip_sqr_sum = 0;
+
     for( i = 0; i < database_info.song_count; i++ ) {
         double rating;
+#ifdef EMPEG
         squash_wunlock( database_info.lock );
         sched_yield();
         squash_wlock( database_info.lock );
+#endif
         rating = get_rating( database_info.songs[i].stat );
         database_info.sum += rating;
         database_info.sqr_sum += rating * rating;
@@ -56,7 +72,9 @@ void start_song_picker() {
         database_info.skip_sum += database_info.songs[i].stat.skip_count;
         database_info.skip_sqr_sum += database_info.songs[i].stat.skip_count * database_info.songs[i].stat.skip_count;
     }
+
     database_info.stats_loaded = TRUE;
+
     squash_wunlock( database_info.lock );
 }
 

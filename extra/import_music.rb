@@ -51,7 +51,7 @@ You may also specify these options:
     --verbose, -v           print lots of status information
 EOF
 
-extension_regex = "\\.(mp3|ogg|flac)$"
+extension_regex = Regexp.compile( /\.(mp3|ogg|flac)$/i )
 
 verbose = false
 noarg = false
@@ -129,7 +129,7 @@ end
 dirlist.each do |dir|
     Find.find(dir) do |filename|
         next unless FileTest.file?( filename )
-        next unless filename.downcase =~ extension_regex
+        next unless extension_regex =~ filename
         file_type = $1
         next if (file_type != "ogg" and only_ogg) \
                 or (file_type != "mp3" and only_mp3) \

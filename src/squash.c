@@ -20,9 +20,11 @@
  * squash.c
  */
 #include "global.h"
+#include "global_squash.h"
 #include "player.h"             /* for player() */
 #include "playlist_manager.h"   /* for playlist_manager() */
-#include "database.h"           /* for setup_database() */
+#include "database.h"           /* for load_meta_data() etc. */
+#include "stat.h"               /* for start_song_picker() */
 #include "display.h"            /* for display_monitor() */
 #include "input.h"              /* for keyboard_monitor(), fifo_monitor() */
 #include "spectrum.h"           /* for spectrum_monitor() */
@@ -72,6 +74,26 @@ void *power(void *data) {
 }
 #endif
 
+void *state_saver(void *data) {
+    struct timespec sleep_time = { 120, 000000000 };
+    while(1) {
+        nanosleep( &sleep_time, NULL );
+        squash_lock( state_info.lock );
+        squash_lock( display_info.lock );
+        squash_rlock( database_info.lock );
+        squash_lock( song_queue.lock );
+        squash_lock( player_info.lock );
+        save_state();
+        squash_unlock( player_info.lock );
+        squash_unlock( song_queue.lock );
+        squash_runlock( database_info.lock );
+        squash_unlock( display_info.lock );
+        squash_unlock( state_info.lock );
+    }
+
+    return (void *)NULL;
+}
+
 #ifndef NO_NCURSES
 void *screen_redraw(void *data) {
     struct timespec sleep_time = { 1, 000000000 };
@@ -87,6 +109,72 @@ void *screen_redraw(void *data) {
     return (void *)NULL;
 }
 #endif
+
+/*
+ * This is called by main() to load the DB.  Since nothing else can happen until
+ * the database is loaded, it does a few other things, in order to tell the other
+ * threads that the database has loaded, and that they can start.
+ */
+void *setup_database( void *data ) {
+    /* Grab our locks */
+    squash_lock( display_info.lock );
+    squash_wlock( database_info.lock );
+
+    /* Load the database */
+    load_db_filenames();
+
+    /* Tell the rest of the system we are done loading the file list */
+    display_info.state = SYSTEM_RUNNING;
+
+    /* Release our locks */
+    squash_wunlock( database_info.lock );
+    squash_unlock( display_info.lock );
+
+    squash_log("starting spectrum");
+    /* Tell the specturm analyzer it can run */
+    squash_lock( spectrum_ring.lock );
+    spectrum_ring.active = TRUE;
+    squash_unlock( spectrum_ring.lock );
+
+    squash_log("starting player");
+    /* Tell the player to start playing */
+    squash_lock( player_command.lock );
+    player_queue_command( CMD_PLAY );
+    squash_signal( player_command.changed );
+    squash_unlock( player_command.lock );
+
+    squash_log("loading state");
+    /* Load any previous playing song */
+    load_state();
+
+    squash_log("drawing screen");
+    draw_screen();
+#ifdef EMPEG
+    draw_empeg_display();
+#endif
+
+    squash_log("starting playlist manager");
+    /* Tell the playlist_manager() thread to add songs */
+    squash_lock( song_queue.lock );
+    song_queue.wanted_size = config.playlist_manager_playlist_size;
+    squash_signal( song_queue.not_full );
+    squash_unlock( song_queue.lock );
+
+    squash_log("loading stats");
+    load_all_meta_data( TYPE_STAT ); /* Load statistics */
+    /* Load the statistics routine (needed for playlist_manager() to call pick_song()) */
+    start_song_picker();
+    squash_signal( database_info.stats_finished );
+    squash_log("stats loaded, database thread ending");
+
+    /* This isn't necessary anymore, since we load metadata on playlist load instead.
+     * (Will be needed again once searching has been added). */
+#if 0
+    load_all_meta_data( TYPE_META ); /* Load info files */
+    squash_log("metadata loaded");
+#endif
+    return (void *)NULL;
+}
 
 /*
  * Program entry point
@@ -108,6 +196,7 @@ int main( int argc, char *argv[] ) {
 #ifndef EMPEG
     pthread_t spectrum_thread;
 #endif
+    pthread_t state_saver_thread;
     pthread_t database_thread;
     pthread_attr_t thread_attr;
 #ifdef EMPEG
@@ -164,7 +253,13 @@ int main( int argc, char *argv[] ) {
     display_info.focus = WIN_NOW_PLAYING;
 #endif
 #ifdef EMPEG
+#ifdef ADVENTURE
     display_info.cur_screen = EMPEG_SCREEN_PLAY;
+#else
+    display_info.cur_screen = EMPEG_SCREEN_PLAY;
+    display_info.in_menu = FALSE;
+    display_info.menu_selection = 0;
+#endif
 #endif
 
     /* Initialize the windows, unless there are no windows */
@@ -298,10 +393,12 @@ int main( int argc, char *argv[] ) {
     thread_sched_param.sched_priority = medium_priority;
     pthread_attr_setschedparam( &thread_attr, &thread_sched_param );
     pthread_attr_setschedpolicy( &thread_attr, SCHED_FIFO );
+#endif
 
     squash_log("starting fifo");
     pthread_create( &fifo_input_thread, &thread_attr, fifo_monitor, (void *)NULL );
 
+#ifdef EMPEG
     /* Listen for input */
     squash_log("starting ir");
     pthread_create( &ir_input_thread, &thread_attr, ir_monitor, (void *)NULL );
@@ -313,6 +410,10 @@ int main( int argc, char *argv[] ) {
     squash_log("starting power");
     pthread_create( &power_thread, &thread_attr, power, (void *)NULL );
 #endif
+
+    squash_log("starting state saver");
+    pthread_create( &state_saver_thread, &thread_attr, state_saver, (void *)NULL );
+
 #ifndef NO_NCURSES
     squash_log("starting keyboard");
     pthread_create( &keyboard_input_thread, &thread_attr, keyboard_monitor, (void *)NULL );
@@ -347,9 +448,12 @@ int main( int argc, char *argv[] ) {
     pthread_cancel( playlist_manager_thread );
     pthread_cancel( player_thread );
     pthread_cancel( frame_decoder_thread );
+    pthread_cancel( state_saver_thread );
 
     /* Save the state */
+    squash_lock( state_info.lock );
     save_state();
+    squash_unlock( state_info.lock );
 
     /* Bring ncurses down, unless there is no ncurses */
 #ifndef NO_NCURSES

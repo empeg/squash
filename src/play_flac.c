@@ -43,12 +43,14 @@ void *flac_open( char *filename, sound_format_t *sound_format ) {
 
     if( (flac_data->decoder = FLAC__file_decoder_new()) == NULL ) {
         squash_free( flac_data );
-        squash_error( "Unable to create flac decoder" );
+        return (void *)NULL;
+        // squash_error( "Unable to create flac decoder" );
     }
 
     if( !FLAC__file_decoder_set_filename( flac_data->decoder, filename ) ) {
         squash_free( flac_data );
-        squash_error( "Unable to set filename in decoder" );
+        return (void *)NULL;
+        // squash_error( "Unable to set filename in decoder" );
     }
 
     FLAC__file_decoder_set_metadata_callback( flac_data->decoder, flac_metadata_callback_decode_frame );
@@ -73,7 +75,8 @@ void *flac_open( char *filename, sound_format_t *sound_format ) {
         case FLAC__FILE_DECODER_INVALID_CALLBACK:
         case FLAC__FILE_DECODER_UNINITIALIZED:
             squash_free( flac_data );
-            squash_error( "Unable to initialize decoder: %s", FLAC__FileDecoderStateString[ state ] );
+            return (void *)NULL;
+            // squash_error( "Unable to initialize decoder: %s", FLAC__FileDecoderStateString[ state ] );
             break;
     }
 

@@ -10,7 +10,7 @@ source /empeg/var/config.ini
 # run the original player
 # /empeg/bin/player
 
-#rwm
+#/bin/rwm
 mount -n -o remount,rw,noatime /drive0
 
 # run the dhcpcd client only if we are at home
@@ -25,5 +25,9 @@ fi
 # run squash
 /drive0/squash/squash
 
-rom
+/bin/rom
+
+/bin/sync
+
+/bin/empeg_poweroff
 

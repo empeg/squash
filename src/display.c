@@ -343,11 +343,155 @@ void draw_screen( void ) {
 
 #ifdef EMPEG
 #define WIDTH 128
+
+void draw_stars_empeg( song_info_t *song ) {
+    unsigned char whole_star[] = { BITMAP_2BPP, 0, 9, 0, 9,
+        0x00, 0x03, 0x00, /*0000 0000 1100 0000 0000 0000*/
+        0x00, 0x03, 0x00, /*0000 0000 1100 0000 0000 0000*/
+        0xff, 0xff, 0xff, /*1111 1111 1111 1111 1100 0000*/
+        0xf0, 0x3f, 0x00, /*0000 1111 1111 1100 0000 0000*/
+        0xc0, 0x0f, 0x00, /*0000 0011 1111 0000 0000 0000*/
+        0xf0, 0x3f, 0x00, /*0000 1111 1111 1100 0000 0000*/
+        0xf0, 0x3c, 0x00, /*0000 1111 0011 1100 0000 0000*/
+        0x3c, 0xf0, 0x00, /*0011 1100 0000 1111 0000 0000*/
+        0x0c, 0xc0, 0x00  /*0011 0000 0000 0011 0000 0000*/
+    };
+    unsigned char half_star[] = { BITMAP_2BPP, 0, 9, 0, 9,
+        0x00, 0x03, 0x00, /*0000 0000 1100 0000 0000 0000*/
+        0x00, 0x03, 0x00, /*0000 0000 1100 0000 0000 0000*/
+        0xff, 0xab, 0x02, /*1111 1111 1101 0101 0100 0000*/
+        0xf0, 0x2b, 0x00, /*0000 1111 1101 0100 0000 0000*/
+        0xc0, 0x0b, 0x00, /*0000 0011 1101 0000 0000 0000*/
+        0xf0, 0x2b, 0x00, /*0000 1111 1101 0100 0000 0000*/
+        0xf0, 0x28, 0x00, /*0000 1111 0001 0100 0000 0000*/
+        0x3c, 0xa0, 0x00, /*0011 1100 0000 0101 0000 0000*/
+        0x0c, 0x80, 0x00  /*0011 0000 0000 0001 0000 0000*/
+    };
+    unsigned char no_star[] = { BITMAP_2BPP, 0, 9, 0, 9,
+        0x00, 0x02, 0x00, /*0000 0000 0100 0000 0000 0000*/
+        0x00, 0x02, 0x00, /*0000 0000 0100 0000 0000 0000*/
+        0xaa, 0xaa, 0x02, /*0101 0101 0101 0101 0100 0000*/
+        0xa0, 0x2a, 0x00, /*0000 0101 0101 0100 0000 0000*/
+        0x80, 0x0a, 0x00, /*0000 0001 0101 0000 0000 0000*/
+        0xa0, 0x2a, 0x00, /*0000 0101 0101 0100 0000 0000*/
+        0xa0, 0x28, 0x00, /*0000 0101 0001 0100 0000 0000*/
+        0x28, 0xa0, 0x00, /*0001 0100 0000 0101 0000 0000*/
+        0x08, 0x80, 0x00  /*0001 0000 0000 0001 0000 0000*/
+    };
+    int rating, i;
+
+    if( !song ) {
+        return;
+    }
+
+    draw_string_empeg( display_info.screen, "Please Rate this song:", 6, 0, WIDTH );
+
+    {
+        char *buf;
+        asprintf(&buf, "(Current rating %+6.3f)", get_rating( song->stat ) );
+        draw_string_empeg( display_info.screen, buf, 12, 0, WIDTH );
+        squash_free( buf );
+    }
+
+    rating = song->stat.manual_rating;
+
+    if( rating == -1 ) {
+        vfdlib_drawText( display_info.screen, "?", 12, 22, 2, 3);
+    } else {
+        vfdlib_drawText( display_info.screen, "?", 12, 22, 2, 2);
+    }
+
+    for( i = 0; i < rating / 2; i++ ) {
+        vfdlib_drawBitmap( display_info.screen, whole_star,
+            20 + i*12, 20, /* dest x,y */
+            0, 0,
+            -1, -1,
+            -1, FALSE);
+    }
+    if( rating % 2 == 1 ) {
+        vfdlib_drawBitmap( display_info.screen, half_star,
+            20 + i*12, 20, /* dest x,y */
+            0, 0,
+            -1, -1,
+            -1, FALSE);
+        i++;
+    }
+    for( ; i < 5; i++ ) {
+        vfdlib_drawBitmap( display_info.screen, no_star,
+            20 + i*12, 20, /* dest x,y */
+            0, 0,
+            -1, -1,
+            -1, FALSE);
+    }
+
+}
+
 void draw_song_empeg( song_info_t *song, bool current_song ) {
     key_set_t title_set = (key_set_t) { (char *[]){"title"}, 1 };
     key_set_t artist_set = (key_set_t) { (char *[]){"artist", "artist_original"}, 2 };
     key_set_t album_set = (key_set_t) { (char *[]){"album", "album_original", "source"}, 3 };
     key_set_t tracknumber_set = (key_set_t) { (char *[]){"tracknumber", "tracknr"}, 2 };
+    unsigned char small_whole_star[] = { BITMAP_2BPP, 0, 5, 0, 5,
+        0x30, 0x00, /* 0000 1100 0000 0000 */
+        0xff, 0x03, /* 1111 1111 1100 0000 */
+        0xfc, 0x00, /* 0011 1111 0000 0000 */
+        0xcf, 0x03, /* 1111 0011 1100 0000 */
+        0x03, 0x03  /* 1100 0000 1100 0000 */
+    };
+    unsigned char small_half_star[] = { BITMAP_2BPP, 0, 5, 0, 5,
+        0x30, 0x00, /* 0000 1100 0000 0000 */
+        0xbf, 0x02, /* 1111 1101 0100 0000 */
+        0xbc, 0x00, /* 0011 1101 0000 0000 */
+        0x8f, 0x02, /* 1111 0001 0100 0000 */
+        0x03, 0x02  /* 1100 0000 0100 0000 */
+    };
+    unsigned char small_no_star[] = { BITMAP_2BPP, 0, 5, 0, 5,
+        0x20, 0x00, /* 0000 0100 0000 0000 */
+        0xaa, 0x02, /* 0101 0101 0100 0000 */
+        0xa8, 0x00, /* 0001 0101 0000 0000 */
+        0x8a, 0x02, /* 0101 0001 0100 0000 */
+        0x02, 0x02  /* 0100 0000 0100 0000 */
+    };
+    int rating, i;
+
+    if( current_song ) {
+        rating = song->stat.manual_rating;
+
+        if( rating == -1 ) {
+            vfdlib_drawText( display_info.screen, "?", 10, 0, 2, 3);
+        } else {
+            vfdlib_drawText( display_info.screen, "?", 10, 0, 2, 2);
+        }
+
+        for( i = 0; i < rating / 2; i++ ) {
+            vfdlib_drawBitmap( display_info.screen, small_whole_star,
+                14 + i*6, 0, /* dest x,y */
+                0, 0,
+                -1, -1,
+                -1, FALSE);
+        }
+        if( rating % 2 == 1 ) {
+            vfdlib_drawBitmap( display_info.screen, small_half_star,
+                14 + i*6, 0, /* dest x,y */
+                0, 0,
+                -1, -1,
+                -1, FALSE);
+            i++;
+        }
+        for( ; i < 5; i++ ) {
+            vfdlib_drawBitmap( display_info.screen, small_no_star,
+                14 + i*6, 0, /* dest x,y */
+                0, 0,
+                -1, -1,
+                -1, FALSE);
+        }
+
+        {
+            char buf[7];
+            snprintf(buf, 7, "%+6.3f", get_rating( song->stat ) );
+            draw_string_monospaced_empeg( display_info.screen, buf, 0, 44, 4 );
+        }
+    }
 
     vfdlib_drawLineVertClipped( display_info.screen, WIDTH, 0, 31, 2);
     vfdlib_drawLineHorizClipped( display_info.screen, 24, 0, WIDTH, 2);
@@ -375,8 +519,8 @@ void draw_song_empeg( song_info_t *song, bool current_song ) {
                 dur_sec = (player_info.song->play_length/1000) % 60;
                 snprintf(buf, 12, "%02d:%02d-%02d:%02d", pos_min, pos_sec, dur_min, dur_sec );
             }
+            draw_string_monospaced_empeg( display_info.screen, buf, 26, 0, 4 );
         }
-        draw_string_monospaced_empeg( display_info.screen, buf, 26, 0, 4 );
         if( player_info.song && player_info.song->play_length != 0 ) {
             int pos = WIDTH*player_info.current_position/player_info.song->play_length;
             vfdlib_drawPointClipped( display_info.screen, pos, 24, 3);
@@ -401,6 +545,7 @@ void draw_song_empeg( song_info_t *song, bool current_song ) {
 void draw_empeg_display( void ) {
 
     vfdlib_clear( display_info.screen, 0 );
+#ifdef ADVENTURE
     switch( display_info.cur_screen ) {
         case EMPEG_SCREEN_PLAY:
             if( player_info.device ) {
@@ -473,8 +618,6 @@ void draw_empeg_display( void ) {
             {
                 int string_width;
                 int x;
-/* top sub menu means top button acts as submenu, otherwise bottom button held acts as submenu */
-#ifdef TOP_SUB_MENU
                 if( player_info.state == STATE_PLAY ) {
                     string_width = vfdlib_getTextWidth( "Pause", 0 );
                     x = (WIDTH - string_width) / 2;
@@ -484,11 +627,6 @@ void draw_empeg_display( void ) {
                     x = (WIDTH - string_width) / 2;
                     draw_string_empeg( display_info.screen, "Play", 0, x, WIDTH-x );
                 }
-#else
-                string_width = vfdlib_getTextWidth( "", 0 );
-                x = (WIDTH - string_width) / 2;
-                draw_string_empeg( display_info.screen, "", 0, x, WIDTH-x );
-#endif
 
                 string_width = vfdlib_getTextWidth( "", 0 );
                 x = 0;
@@ -640,6 +778,210 @@ void draw_empeg_display( void ) {
             draw_string_empeg( display_info.screen, "Blackhole", 6, 0, WIDTH );
             break;
     }
+#else
+    if( display_info.in_menu ) {
+        int i, first, last, selection;
+        selection = display_info.menu_selection;
+        first = 0;
+        last = menu_list[ display_info.cur_screen ].item_count;
+        if( last - first > 5 ) {
+            if( selection - first > 2 ) {
+                first = selection - 2;
+                if( last - first < 6 ) {
+                    first = last - 5;
+                }
+            }
+        }
+        if( last - first > 5 ) {
+            last = first + 5;
+        }
+        if( first == 0 ) {
+            vfdlib_drawLineHorizClipped( display_info.screen, 0, 0, WIDTH, 2);
+        }
+        if( last == menu_list[ display_info.cur_screen ].item_count ) {
+            vfdlib_drawLineHorizClipped( display_info.screen, 1+(last-first)*6, 0, WIDTH, 2);
+        }
+        draw_string_empeg( display_info.screen, ">", 1 + 6 * (selection-first), 0, WIDTH );
+        for( i = first; i < last; i++ ) {
+            draw_string_empeg( display_info.screen, menu_list[ display_info.cur_screen ].items[i].title, 1+(i-first)*6, 10 + 10*menu_list[ display_info.cur_screen ].items[i].indentation, WIDTH );
+        }
+    } else {
+        switch( display_info.cur_screen ) {
+            case EMPEG_SCREEN_PLAY:
+                if( player_info.device ) {
+                    int volume = player_info.device->volume[0];
+                    if( volume >= 0 && volume <= 100 ) {
+                        char *volume_string;
+                        asprintf( &volume_string, "Vol:%3d", volume );
+                        draw_string_monospaced_empeg( display_info.screen, volume_string, 0, WIDTH-7*4, 4 );
+                        free( volume_string );
+                    }
+                }
+                draw_song_empeg( player_info.song, TRUE );
+                break;
+            case EMPEG_SCREEN_PLAY_RATE_SONG:
+                draw_stars_empeg( player_info.song );
+                break;
+            case EMPEG_SCREEN_PLAYLIST_RATE_SONG:
+                {
+                    int i = 0;
+                    song_queue_entry_t *cur_queue_entry;
+                    song_info_t *cur_song;
+
+                    cur_queue_entry = song_queue.head;
+                    while( cur_queue_entry != NULL && i != song_queue.selected ) {
+                        cur_queue_entry = cur_queue_entry->next;
+                        i++;
+                    }
+
+                    cur_song = cur_queue_entry->song_info;
+
+                    if( cur_song ) {
+                        draw_stars_empeg( cur_song );
+                    }
+                }
+                break;
+            case EMPEG_SCREEN_GLOBAL_SONG_INFO:
+                {
+                    char *line_buffer;
+                    float avg, std_dev;
+                    int x;
+
+                    draw_string_empeg( display_info.screen, "Stats:", 6, 0, WIDTH );
+                    draw_string_empeg( display_info.screen, "(avg", 6, 11*4, WIDTH-11*4 );
+                    draw_string_empeg( display_info.screen, "/", 6, 19*4, WIDTH-19*4 );
+                    x = 29*4 - vfdlib_getTextWidth( "std dev)", 2 ) + 1;
+                    draw_string_empeg( display_info.screen, "stddev)", 6, x, WIDTH-x );
+                    draw_string_empeg( display_info.screen, "Rating:", 12, 0, WIDTH );
+                    draw_string_empeg( display_info.screen, "Play Count:", 18, 0, WIDTH );
+                    draw_string_empeg( display_info.screen, "Skip Count:", 24, 0, WIDTH );
+
+                    avg = database_info.sum / database_info.song_count;
+                    std_dev = sqrt( fabs(database_info.sqr_sum / database_info.song_count - avg*avg) );
+                    asprintf( &line_buffer, "% 9.6f/% 9.6f", avg, std_dev );
+                    draw_string_monospaced_empeg( display_info.screen, line_buffer, 12, 10*4, 4 );
+                    free( line_buffer );
+
+                    avg = (double)database_info.play_sum / database_info.song_count;
+                    std_dev = sqrt( fabs((double)database_info.play_sqr_sum / database_info.song_count - avg*avg) );
+                    asprintf( &line_buffer, "% 9.6f/% 9.6f", avg, std_dev );
+                    draw_string_monospaced_empeg( display_info.screen, line_buffer, 18, 10*4, 4 );
+                    free( line_buffer );
+
+                    avg = (double)database_info.skip_sum / database_info.song_count;
+                    std_dev = sqrt( fabs((double)database_info.skip_sqr_sum / database_info.song_count - avg*avg) );
+                    asprintf( &line_buffer, "% 9.6f/% 9.6f", avg, std_dev );
+                    draw_string_monospaced_empeg( display_info.screen, line_buffer, 24, 10*4, 4 );
+                    free( line_buffer );
+                }
+                break;
+            case EMPEG_SCREEN_PLAY_SONG_INFO:
+            case EMPEG_SCREEN_PLAYLIST_SONG_INFO:
+                {
+                    char *filename;
+                    float rating;
+                    int play_count, skip_count;
+                    char *line_buffer;
+
+                    if( display_info.cur_screen == EMPEG_SCREEN_PLAY_SONG_INFO ) {
+                        filename = player_info.song->filename;
+                        rating = get_rating( player_info.song->stat );
+                        play_count = player_info.song->stat.play_count;
+                        skip_count = player_info.song->stat.skip_count;
+                    } else {
+                        int i = 0;
+                        song_queue_entry_t *cur_queue_entry;
+                        song_info_t *cur_song;
+
+                        cur_queue_entry = song_queue.head;
+                        while( cur_queue_entry != NULL && i != song_queue.selected ) {
+                            cur_queue_entry = cur_queue_entry->next;
+                            i++;
+                        }
+
+                        cur_song = cur_queue_entry->song_info;
+
+                        filename = cur_song->filename;
+                        rating = get_rating( cur_song->stat );
+                        play_count = cur_song->stat.play_count;
+                        skip_count = cur_song->stat.skip_count;
+                    }
+
+                    draw_string_empeg( display_info.screen, filename, 0, 0, WIDTH );
+
+                    draw_string_empeg( display_info.screen, "Stats:", 6, 0, WIDTH );
+
+                    draw_string_empeg( display_info.screen, "Rating:", 12, 0, WIDTH );
+                    draw_string_empeg( display_info.screen, "Play Count:", 18, 0, WIDTH );
+                    draw_string_empeg( display_info.screen, "Skip Count:", 24, 0, WIDTH );
+
+                    asprintf( &line_buffer, "% 6.3f", rating );
+                    draw_string_monospaced_empeg( display_info.screen, line_buffer, 12, 10*4, 4 );
+                    free( line_buffer );
+
+                    asprintf( &line_buffer, "% 6d", play_count );
+                    draw_string_monospaced_empeg( display_info.screen, line_buffer, 18, 10*4, 4 );
+                    free( line_buffer );
+
+                    asprintf( &line_buffer, "% 6d", skip_count );
+                    draw_string_monospaced_empeg( display_info.screen, line_buffer, 24, 10*4, 4 );
+                    free( line_buffer );
+                }
+                break;
+            case EMPEG_SCREEN_PLAYLIST:
+                {
+                    int i = 0;
+                    song_queue_entry_t *cur_queue_entry;
+                    song_info_t *cur_song;
+                    char *status;
+                    int x;
+
+                    cur_queue_entry = song_queue.head;
+                    while( cur_queue_entry != NULL && i != song_queue.selected ) {
+                        cur_queue_entry = cur_queue_entry->next;
+                        i++;
+                    }
+                    asprintf( &status, "Song %d of %d in playlist", i+1, song_queue.size );
+                    x = (WIDTH - vfdlib_getTextWidth( status, 0 )-1) / 2;
+                    draw_string_empeg( display_info.screen, status, 0, x, WIDTH-x );
+                    draw_string_empeg( display_info.screen, "<<<", 0, 0, WIDTH );
+                    draw_string_empeg( display_info.screen, ">>>", 0, WIDTH-4*3, 4*3 );
+                    free(status);
+
+                    if( cur_queue_entry != NULL ) {
+                        cur_song = cur_queue_entry->song_info;
+                        draw_song_empeg( cur_song, FALSE );
+                    }
+                }
+                break;
+            case EMPEG_SCREEN_QUIT:
+                draw_string_empeg( display_info.screen, "Are you sure you would like to quit?", 6, 0, WIDTH );
+                draw_string_empeg( display_info.screen, "(Press the knob to confirm)", 12, 0, WIDTH );
+                break;
+            case EMPEG_SCREEN_SET_DISPLAY_BRIGHTNESS:
+                {
+                    char *line_buffer;
+                    asprintf( &line_buffer, "Current brightness << %d >>", display_info.brightness );
+                    draw_string_empeg( display_info.screen, line_buffer, 12, 0, WIDTH );
+                    free( line_buffer );
+                }
+                break;
+            case EMPEG_SCREEN_SET_RATING_BIAS:
+                {
+                    char *line_buffer;
+                    asprintf( &line_buffer, "Current Bias << %3d%% >>", (int)(100*config.db_manual_rating_bias) );
+                    draw_string_empeg( display_info.screen, line_buffer, 9, 0, WIDTH );
+                    free( line_buffer );
+                    draw_string_empeg( display_info.screen, "(Higher values bias manual ratings", 15, 0, WIDTH );
+                    draw_string_empeg( display_info.screen, "versus automatic rating)", 21, 0, WIDTH );
+                }
+                break;
+            default:
+                draw_string_empeg( display_info.screen, "Blackhole", 6, 0, WIDTH );
+                break;
+        }
+    }
+#endif
     ioctl(display_info.screen_fd, _IO('d', 0));
 }
 #undef WIDTH
@@ -656,6 +998,8 @@ void draw_now_playing( void ) {
     song_info_t *cur_song;
     long cur_duration, cur_position;
     int time_left;
+    int rating_left;
+    int rating_title_left;
     key_set_t title_set = (key_set_t) { (char *[]){"title"}, 1 };
     key_set_t artist_set = (key_set_t) { (char *[]){"artist", "artist_original"}, 2 };
     key_set_t album_set = (key_set_t) { (char *[]){"album", "album_original"}, 2 };
@@ -737,11 +1081,46 @@ void draw_now_playing( void ) {
         time_left = win_width - time_width - 1;
     }
 
+    rating_left = win_width - strlen("OOOOO") - 1;
+    rating_title_left = win_width - strlen("Manual Rating:") - 1;
+
+    if( time_left > rating_left ) {
+        time_left = rating_left;
+    } else {
+        rating_left = time_left;
+    }
+    if( time_left > rating_title_left ) {
+        time_left = rating_title_left;
+        rating_left = time_left;
+    } else {
+        rating_title_left = time_left;
+    }
+
     /* Print song information */
-    draw_meta_string( win, cur_song, title_set, 1, 10, win_width - 16 );
-    draw_meta_string( win, cur_song, artist_set, 2, 10, win_width - 16 );
-    draw_meta_string( win, cur_song, album_set, 3, 10, time_left - 12 );
+    draw_meta_string( win, cur_song, title_set, 1, 10, rating_title_left-1 - 10 );
+    draw_meta_string( win, cur_song, artist_set, 2, 10, rating_left-1 - 10 );
+    draw_meta_string( win, cur_song, album_set, 3, 10, time_left-1 - 10 );
     draw_meta_string( win, cur_song, tracknumber_set, 4, 10, 9 );
+
+    {
+        int i;
+        int rating = cur_song->stat.manual_rating;
+        mvwprintw( win, 1, rating_title_left, "Manual Rating:" );
+        if( rating == -1 ) {
+            mvwprintw( win, 2, rating_left, "N/R" );
+        } else {
+            for( i = 0; i < rating/2; i++ ) {
+                mvwaddch( win, 2, rating_left + i, 'O' );
+            }
+            if( rating % 2 != 0 ) {
+                mvwaddch( win, 2, rating_left + i, 'o' );
+                i++;
+            }
+            for( ; i < 5; i++ ) {
+                mvwaddch( win, 2, rating_left + i, '.' );
+            }
+        }
+    }
 
     /* Process Time Information */
     if( cur_duration >= 0 ) {
@@ -772,6 +1151,14 @@ void draw_now_playing( void ) {
 
         wattroff( win, text_color );
     }
+
+    wattron( win, text_color );
+    mvwaddch( win, 0, rating_title_left - 1, ACS_TTEE );
+    mvwaddch( win, 1, rating_title_left - 1, ACS_VLINE );
+    mvwaddch( win, 2, rating_title_left - 1, ACS_VLINE );
+    mvwaddch( win, 3, rating_title_left - 1, ACS_VLINE );
+    mvwaddch( win, 4, rating_title_left - 1, ACS_BTEE );
+    wattroff( win, text_color );
 
     if( cur_duration == -1 ) {
         /* Print Time Information */
@@ -1080,6 +1467,7 @@ void draw_help( void ) {
     mvwaddstr( win, 0 , 26, "Skip" );
     mvwaddstr( win, 1 , 26, "Edit" );
     mvwaddstr( win, 0 , 38, "Info" );
+    mvwaddstr( win, 1 , 38, "m/M Adjust Rating" );
 
     /* Print Keys */
     wattron( win, A_BOLD );
@@ -1090,6 +1478,8 @@ void draw_help( void ) {
     mvwaddch( win, 0, 26, 'S' );
     mvwaddch( win, 1, 26, 'E' );
     mvwaddch( win, 0, 38, 'I' );
+    mvwaddch( win, 1, 38, 'm' );
+    mvwaddch( win, 1, 40, 'M' );
     wattroff( win, A_BOLD );
 
     /* Refresh Changes */
@@ -1298,7 +1688,7 @@ void draw_string_empeg( char *buffer, char *string, int top, int left, int width
 
     line_buffer = strdup( string );
     line_width = strlen( string );
-    cur_width = vfdlib_getTextWidth( line_buffer, 2 );
+    cur_width = vfdlib_getTextWidth( line_buffer, 2 ) - 1;
     while( cur_width > width ) {
         trim = (cur_width - width + 5)/6;
         if( trim < 1 ) {
@@ -1306,7 +1696,7 @@ void draw_string_empeg( char *buffer, char *string, int top, int left, int width
         }
         line_width -= trim;
         line_buffer[ line_width ] = '\0';
-        cur_width = vfdlib_getTextWidth( line_buffer, 2 );
+        cur_width = vfdlib_getTextWidth( line_buffer, 2 ) - 1;
     }
     vfdlib_drawText( buffer, line_buffer, left, top, 2, 3);
 
@@ -1332,7 +1722,7 @@ void draw_meta_string_empeg( char *buffer, song_info_t *song, key_set_t key_set,
     bool added_trail;
 
     /* If we can't even fit the elipses, just don't print anything */
-    if( vfdlib_getTextWidth( "...", 2 ) > width ) {
+    if( vfdlib_getTextWidth( "...", 2 ) - 1 > width ) {
         return;
     }
     space_width = vfdlib_getTextWidth( " ", 2 );
@@ -1378,6 +1768,9 @@ void draw_meta_string_empeg( char *buffer, song_info_t *song, key_set_t key_set,
         line_pixel_width -= semicolon_width;
         line_pixel_width -= space_width;
     }
+
+    /* Remove the extra pixel spacing on the end */
+    line_pixel_width--;
 
     /* If we are overflowed, first add the elipses */
     if( line_pixel_width > width ) {

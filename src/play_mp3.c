@@ -39,7 +39,8 @@ void *mp3_open( char *filename, sound_format_t *sound_format ) {
 
     /* Open the song */
     if( (mp3_data->file = fopen(filename, "r")) == NULL ) {
-        squash_error( "Unable to open file" );
+        return (void *)NULL;
+        // squash_error( "Unable to open file" );
     }
 
     /* Open the mp3 file */
@@ -47,7 +48,8 @@ void *mp3_open( char *filename, sound_format_t *sound_format ) {
     mp3_data->file_size = file_stat.st_size;
     mp3_data->buffer = mmap(0, mp3_data->file_size, PROT_READ, MAP_SHARED, fileno(mp3_data->file), 0);
     if( mp3_data->buffer == (void *)-1 ) {
-        squash_error( "Unable to open MP3 file" );
+        return (void *)NULL;
+        // squash_error( "Unable to open MP3 file" );
     }
 
     mp3_data->pcm_data = NULL;

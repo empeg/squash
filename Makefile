@@ -12,8 +12,7 @@ INCLUDE	:= -Iinclude
 LDFLAGS	:= -lFLAC -lmad -lpthread -lm
 
 ifdef EMPEG
-# top sub menu means top button acts as submenu, otherwise bottom button held acts as submenu
-CFLAGS := -DTOP_SUB_MENU $(CFLAGS)
+#	CFLAGS := -DADVENTURE $(CFLAGS)
 
 # Use this if you are using the debian tool chain
 #	CC := arm-linux-gcc
@@ -103,13 +102,13 @@ $(shell umask 002 && mkdir -p obj)
 
 # Rules
 ifndef EMPEG
-all: squash
+all: squash generate_songlist
 else
 all: squash empeg_poweroff
 endif
 
-SQUASH_OBJ_LIST := squash.o play_mp3.o play_ogg.o play_flac.o sound.o player.o playlist_manager.o database.o display.o spectrum.o global.o stat.o input.o
-SQUASH_FILE_LIST := obj/player.o obj/playlist_manager.o obj/display.o obj/database.o obj/input.o obj/sound.o obj/play_flac.o obj/play_ogg.o obj/play_mp3.o obj/squash.o obj/spectrum.o obj/global.o obj/stat.o
+SQUASH_OBJ_LIST := squash.o play_mp3.o play_ogg.o play_flac.o sound.o player.o playlist_manager.o database.o display.o spectrum.o global.o stat.o input.o global_squash.o
+SQUASH_FILE_LIST := obj/player.o obj/playlist_manager.o obj/display.o obj/database.o obj/input.o obj/sound.o obj/play_flac.o obj/play_ogg.o obj/play_mp3.o obj/squash.o obj/spectrum.o obj/global.o obj/stat.o obj/global_squash.o
 ifdef EMPEG
 SQUASH_OBJ_LIST := $(SQUASH_OBJ_LIST) vfdlib.o
 SQUASH_FILE_LIST := $(SQUASH_FILE_LIST) obj/vfdlib.o
@@ -136,7 +135,7 @@ player.o: %.o : %.c %.h global.h sound.h play_mp3.h play_ogg.h play_flac.h spect
 display.o: %.o : %.c %.h global.h spectrum.h database.h stat.h version.h empeg/vfdlib.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
-database.o: %.o : %.c %.h global.h stat.h player.h display.h play_ogg.h play_mp3.h play_flac.h
+database.o: %.o : %.c %.h global.h player.h display.h play_ogg.h play_mp3.h play_flac.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
 stat.o: %.o : %.c %.h global.h database.h
@@ -145,10 +144,13 @@ stat.o: %.o : %.c %.h global.h database.h
 global.o: %.o : %.c %.h display.h database.h playlist_manager.h sound.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
+global_squash.o: %.o : %.c %.h display.h database.h playlist_manager.h sound.h
+	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
+
 input.o: %.o : %.c %.h global.h display.h player.h database.h sound.h stat.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
-squash.o: %.o : %.c %.h global.h player.h playlist_manager.h database.h display.h input.h spectrum.h sound.h
+squash.o: %.o : %.c %.h global.h global_squash.h stat.h player.h playlist_manager.h database.h display.h input.h spectrum.h sound.h
 	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
 
 vfdlib.o: empeg/vfdlib.h empeg/vfdlib.c
@@ -157,7 +159,13 @@ vfdlib.o: empeg/vfdlib.h empeg/vfdlib.c
 empeg_poweroff: empeg_poweroff.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o empeg_poweroff src/empeg_poweroff.c
 
+generate_songlist.o: %.o : %.c global.h database.h stat.h
+	$(CC) $(CFLAGS) $(INCLUDE) -c -o obj/$*.o src/$*.c
+
+generate_songlist: generate_songlist.o database.o global.o stat.o play_ogg.o play_mp3.o play_flac.o
+	$(CC) $(LDFLAGS) -o generate_songlist obj/generate_songlist.o obj/database.o obj/global.o obj/stat.o obj/play_ogg.o obj/play_mp3.o obj/play_flac.o
+
 clean:
-	rm -rf squash* obj core empeg_poweroff
+	rm -rf squash* obj core empeg_poweroff generate_filelist
 
 .PHONY: all clean

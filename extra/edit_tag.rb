@@ -53,7 +53,7 @@ And these commands:
                             regex may not contain a comma!
 EOF
 
-extension_regex = "\\.(mp3|ogg|flac)$"
+extension_regex = Regexp.compile( /\.(mp3|ogg|flac)$/i )
 
 verbose = false
 noarg = false
@@ -139,7 +139,7 @@ def process( filename, where_to_add )
     new_lines = []
     if where_to_add == "at_beginning"
         $command_list.each_index do |command_number|
-            type, key, value = $command_list[command_number].indices("type", "key", "value")
+            type, key, value = $command_list[command_number].values_at("type", "key", "value")
             if type == "add"
                 new_lines << { "command_number"=>command_number, "line"=>"#{key}=#{value}" }
             end
@@ -155,11 +155,11 @@ def process( filename, where_to_add )
             break if line.nil?
         else
             line_info = new_lines.shift
-            line_command_number, line = line_info.indices("command_number", "line")
+            line_command_number, line = line_info.values_at("command_number", "line")
         end
         delete = false
         $command_list.each_index do |command_number|
-            type, key, value, regex = $command_list[command_number].indices("type", "key", "value", "regex")
+            type, key, value, regex = $command_list[command_number].values_at("type", "key", "value", "regex")
             if line =~ /^===/ and where_to_add == "at_equals"
                 if type == "add"
                     new_lines << { "command_number"=>command_number, "line"=>"#{key}=#{value}" }
@@ -196,7 +196,7 @@ dirlist.each do |dir|
     elsif which == "info"
         Find.find(dir) do |filename|
             next unless FileTest.file?( filename )
-            next unless filename.downcase =~ extension_regex
+            next unless extension_regex =~ filename
             puts( "Reading: #{filename}" ) if verbose
             info_filename = filename+".info"
 

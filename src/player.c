@@ -169,6 +169,7 @@ void *player( void *input_data ) {
                         player_info.state = STATE_STOP;
                         frame_buffer.size = 0;
                         frame_buffer.pcm_size = 0;
+                        squash_broadcast( frame_buffer.restart );
 
                         if( play_state == STATE_IN_SONG ) {
                             /* Return to the begenning of the song */
@@ -187,6 +188,7 @@ void *player( void *input_data ) {
                         break;
                     case CMD_PLAY:
                         player_info.state = STATE_PLAY;
+                        squash_broadcast( frame_buffer.restart );
                         break;
                     default:
                         /* ignore */
@@ -255,7 +257,7 @@ void *player( void *input_data ) {
 
                 frame_buffer.decoder_data = song_functions[ cur_song->song_type ].open( full_filename, &sound_format );
                 if( frame_buffer.decoder_data == NULL ) {
-                    squash_error("Problem opening song file %s", full_filename);
+                    squash_error("Problem opening file: %s");
                 }
                 squash_free( full_filename );
 

@@ -71,15 +71,15 @@
  */
 #ifdef DEBUG
 #ifdef EMPEG_DSP
-    #define CONFIG_KEY_COUNT 14
+    #define CONFIG_KEY_COUNT 15
 #else
-    #define CONFIG_KEY_COUNT 12
+    #define CONFIG_KEY_COUNT 13
 #endif
 #else
 #ifdef EMPEG_DSP
-    #define CONFIG_KEY_COUNT 13
+    #define CONFIG_KEY_COUNT 14
 #else
-    #define CONFIG_KEY_COUNT 11
+    #define CONFIG_KEY_COUNT 12
 #endif
 #endif
 
@@ -91,7 +91,9 @@ enum song_type_e { TYPE_UNKNOWN, TYPE_OGG, TYPE_MP3, TYPE_FLAC };
 enum system_state_e { SYSTEM_LOADING, SYSTEM_RUNNING };
 enum data_type_e { TYPE_STRING, TYPE_INT, TYPE_DOUBLE };
 enum meta_type_e { TYPE_META, TYPE_STAT }; /* these match with db_extensions array */
+
 #ifdef EMPEG
+#ifdef ADVENTURE
 enum empeg_screen_e {
     EMPEG_SCREEN_NAVIGATION_1,
         EMPEG_SCREEN_PLAY,
@@ -108,10 +110,27 @@ enum empeg_screen_e {
         EMPEG_SCREEN_SET_DISPLAY_BRIGHTNESS,
     EMPEG_SCREEN_NONE
 };
+#else
+enum empeg_screen_e {
+    EMPEG_SCREEN_MAIN_MENU,
+        EMPEG_SCREEN_PLAY,
+            EMPEG_SCREEN_PLAY_SONG_INFO,
+            EMPEG_SCREEN_PLAY_RATE_SONG,
+        EMPEG_SCREEN_PLAYLIST,
+            EMPEG_SCREEN_PLAYLIST_SONG_INFO,
+            EMPEG_SCREEN_PLAYLIST_RATE_SONG,
+        EMPEG_SCREEN_GLOBAL_SONG_INFO,
+        EMPEG_SCREEN_QUIT,
+        EMPEG_SCREEN_SETTINGS,
+            EMPEG_SCREEN_SET_DISPLAY_BRIGHTNESS,
+            EMPEG_SCREEN_SET_RATING_BIAS,
+    EMPEG_SCREEN_COUNT
+};
+#endif
 #endif
 
 /*
- * The difference betwenn STOP and BIG_STOP is that BIG_STOP makes the player
+ * The difference between STOP and BIG_STOP is that BIG_STOP makes the player
  * not load the file before pausing.
  */
 enum player_state_e { STATE_PLAY, STATE_PAUSE, STATE_STOP, STATE_BIG_STOP };
@@ -167,6 +186,7 @@ typedef struct config_s {
     int db_readonly;
     int db_saveinfo;
     int db_overwriteinfo;
+    float db_manual_rating_bias;
 
     char *global_state_path;
     char *input_fifo_path;
@@ -195,6 +215,7 @@ typedef struct stat_info_s {
     int play_count;
     int skip_count;
     int repeat_counter;
+    int manual_rating;
     bool changed;
 } stat_info_t;
 
@@ -383,6 +404,19 @@ typedef struct win_info_s {
 } win_info_t;
 #endif
 
+typedef struct menu_item_s {
+    char *title;
+    int indentation;
+    int screen_on_press;
+    bool leave_menu;
+} menu_item_t;
+
+typedef struct menu_list_s {
+    menu_item_t *items;
+    int item_count;
+    int default_item;
+} menu_list_t;
+
 typedef struct display_info_s {
     pthread_mutex_t lock;
     pthread_cond_t changed;
@@ -390,14 +424,20 @@ typedef struct display_info_s {
 #ifdef EMPEG
     int screen_fd;
     char *screen;
+#ifdef ADVENTURE
     enum empeg_screen_e cur_screen;
+#else
+    enum empeg_screen_e cur_screen;
+    bool in_menu;
+    int menu_selection;
+#endif
     int brightness;
 #endif
 #ifndef NO_NCURSES
     win_info_t window[ WIN_COUNT ];
     int focus;
-#endif
     bool too_small;
+#endif
 } display_info_t;
 
 /* Log information */
@@ -458,6 +498,11 @@ config_t config;
 /* Holds valid configuration varables, defined at the top of global.c */
 extern config_keys_t config_keys[ CONFIG_KEY_COUNT ];
 
+#ifdef EMPEG
+/* Holds the menu structure for the empeg */
+extern menu_list_t menu_list[ EMPEG_SCREEN_COUNT ];
+#endif
+
 #ifdef DEBUG
 log_info_t log_info;
 #endif
@@ -511,8 +556,6 @@ log_info_t log_info;
  * Prototypes
  */
 void save_state();
-void load_state_callback( void *data, char *header, char *key, char *value );
-void load_state();
 enum song_type_e get_song_type( const char *base_name, const char *file_name );
 void _squash_error( const char *filename, int line_num, const char *format, ... );
 void _squash_log( const char *filename, int line_num, const char *format, ... );

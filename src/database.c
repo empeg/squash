@@ -20,7 +20,6 @@
  * database.c
  */
 #include "global.h"
-#include "stat.h"       /* for start_song_picker() */
 #include "player.h"     /* for player_queue_command() */
 #include "display.h"    /* for draw_info() and draw_screen() */
 #include "play_ogg.h"   /* for ogg_load_meta() */
@@ -31,70 +30,6 @@
 #include "version.h"    /* for SQUASH_VERSION */
 #endif
 #include "database.h"
-
-/*
- * This is called by main() to load the DB.  Since nothing else can happen until
- * the database is loaded, it does a few other things, in order to tell the other
- * threads that the database has loaded, and that they can start.
- */
-void *setup_database( void *data ) {
-    /* Grab our locks */
-    squash_lock( display_info.lock );
-    squash_wlock( database_info.lock );
-
-    /* Load the database */
-    load_db_filenames();
-
-    /* Tell the rest of the system we are done loading the file list */
-    display_info.state = SYSTEM_RUNNING;
-
-    /* Release our locks */
-    squash_wunlock( database_info.lock );
-    squash_unlock( display_info.lock );
-
-    squash_log("starting spectrum");
-    /* Tell the specturm analyzer it can run */
-    squash_lock( spectrum_ring.lock );
-    spectrum_ring.active = TRUE;
-    squash_unlock( spectrum_ring.lock );
-
-    squash_log("starting player");
-    /* Tell the player to start playing */
-    squash_lock( player_command.lock );
-    player_queue_command( CMD_PLAY );
-    squash_signal( player_command.changed );
-    squash_unlock( player_command.lock );
-
-    squash_log("loading state");
-    /* Load any previous playing song */
-    load_state();
-
-    squash_log("drawing screen");
-    draw_screen();
-
-    squash_log("starting playlist manager");
-    /* Tell the playlist_manager() thread to add songs */
-    squash_lock( song_queue.lock );
-    song_queue.wanted_size = config.playlist_manager_playlist_size;
-    squash_signal( song_queue.not_full );
-    squash_unlock( song_queue.lock );
-
-    squash_log("loading stats");
-    load_all_meta_data( TYPE_STAT ); /* Load statistics */
-    /* Load the statistics routine (needed for playlist_manager() to call pick_song()) */
-    start_song_picker();
-    squash_signal( database_info.stats_finished );
-    squash_log("stats loaded, database thread ending");
-
-    /* This isn't necessary anymore, since we load metadata on playlist load instead.
-     * (Will be needed again once searching has been added). */
-#if 0
-    load_all_meta_data( TYPE_META ); /* Load info files */
-    squash_log("metadata loaded");
-#endif
-
-    return (void *)NULL;
-}
 
 /*
  * Loads the database.  Will walk the config.db_paths[ BASENAME_SONG ] directory
@@ -170,7 +105,7 @@ void load_masterlist( void ) {
     while( cur_data != NULL ) {
         this_line = strsep( &cur_data, "\n" );
         /* if not a line, empty, or is a comment */
-        if( !(this_line == NULL || strlen(this_line) == 0 || this_line[0] == '#') ) {
+        if( !(this_line == NULL || this_line[0] == '\0' || this_line[0] == '#') ) {
             _load_file( this_line, TRUE );
         }
     }
@@ -387,6 +322,10 @@ void save_song( song_info_t *song ) {
             continue;
         }
 
+        if( db_extensions[i].which_basename == BASENAME_STAT && ! database_info.stats_loaded ) {
+            continue;
+        }
+
         /* Construct a filename to save */
         cur_filename = build_fullfilename( song, db_extensions[i].which_basename );
 
@@ -437,6 +376,7 @@ void save_stat_data( song_info_t *song, FILE *file ) {
     fprintf( file, "play_count=%d\n", song->stat.play_count );
     fprintf( file, "skip_count=%d\n", song->stat.skip_count );
     fprintf( file, "repeat_counter=%d\n", song->stat.repeat_counter );
+    fprintf( file, "manual_rating=%d\n", song->stat.manual_rating );
     fprintf( file, "\n" );
 
     /* Reset the changed flag */
@@ -581,10 +521,16 @@ void load_meta_data( song_info_t *song, enum meta_type_e which ) {
 void load_all_meta_data( enum meta_type_e which ) {
     int i;
     squash_log("loading %d (write lock for database will oscillate)", which);
+#ifdef EMPEG
     squash_rlock( database_info.lock );
+#else
+    squash_wlock( database_info.lock );
+#endif
     for( i = 0; i < database_info.song_count; i++ ) {
+#ifdef EMPEG
         squash_runlock( database_info.lock );
         squash_wlock( database_info.lock );
+#endif
         /* If the type is meta, we need to be careful, and not load this song a second time  */
         if( which == TYPE_META && database_info.songs[i].meta_key_count != -1 ) {
             squash_wunlock( database_info.lock );
@@ -594,11 +540,22 @@ void load_all_meta_data( enum meta_type_e which ) {
         if( i % 500 == 0 ) {
             squash_log("%d of %d load complete", i, database_info.song_count);
         }
+#ifdef EMPEG
         squash_wunlock( database_info.lock );
         sched_yield();
         squash_rlock( database_info.lock );
+#endif
     }
+
+    /* go back and save any changes that may have happened while we were loading */
+    for( i = 0; i < database_info.song_count; i++ ) {
+        save_song( &database_info.songs[i] );
+    }
+#ifdef EMPEG
     squash_runlock( database_info.lock );
+#else
+    squash_wunlock( database_info.lock );
+#endif
 }
 
 
@@ -674,11 +631,15 @@ void set_stat_data( void *data, char *header, char *key, char *value ) {
 
     /* Add it to the structure */
     if( strncasecmp("play_count", key, 11) == 0 ) {
-        song->stat.play_count = int_value;
+        song->stat.play_count += int_value;
     } else if( strncasecmp("repeat_counter", key, 15) == 0 ) {
         song->stat.repeat_counter = int_value;
     } else if( strncasecmp("skip_count", key, 11) == 0 ) {
-        song->stat.skip_count = int_value;
+        song->stat.skip_count += int_value;
+    } else if( strncasecmp("manual_rating", key, 14) == 0 ) {
+        if( song->stat.manual_rating == -1 ) {
+            song->stat.manual_rating = int_value;
+        }
     }
 
     squash_free( key );
@@ -719,6 +680,7 @@ void _load_file( char *filename, bool trust ) {
         song->stat.play_count = 0;
         song->stat.skip_count = 0;
         song->stat.repeat_counter = 0;
+        song->stat.manual_rating = -1;
         song->stat.changed = FALSE;
         song->play_length = -1;
         song->song_type = -1;

@@ -69,7 +69,7 @@ void ensure_song_fully_loaded( song_info_t *song_info ) {
 
             decoder_data = song_functions[ song_info->song_type ].open( full_filename, &sound_format );
             if( decoder_data == NULL ) {
-                squash_error("Problem opening song file %s", full_filename);
+                squash_error("Can't open file %s", full_filename );
             }
 
             /* Set Now Playing Information */

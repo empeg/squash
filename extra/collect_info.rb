@@ -39,7 +39,7 @@ You may also specify these options:
     --verbose, -v           print lots of status information
 EOF
 
-extension_regex = "\\.(mp3|ogg|flac)$"
+extension_regex = Regexp.compile( /\.(mp3|ogg|flac)$/i )
 
 verbose = false
 noindex = false
@@ -91,7 +91,7 @@ dirlist.each do |dir|
 
     Find.find(dir) do |filename|
         next unless FileTest.file?( filename )
-        next unless filename.downcase =~ extension_regex
+        next unless extension_regex =~ filename
         puts( "Processing: #{filename}" ) if verbose
         cindex.puts( filename ) unless noindex
         cinfo.puts( "=== #{filename}" )

@@ -17,9 +17,10 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 /*
- * version.h
+ * global_squash.h
+ * Contains all shared structures and global data for squash
  */
 
-#ifndef SQUASH_VERSION
-#define SQUASH_VERSION "1.0"
-#endif
+
+void load_state_callback( void *data, char *header, char *key, char *value );
+void load_state();
